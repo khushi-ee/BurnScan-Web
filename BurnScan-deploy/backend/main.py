@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -27,8 +28,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # ── Make core/ importable ─────────────────────────────────────────────────
-# Works whether launched from project root or from backend/ subdirectory
-ROOT_DIR = Path(__file__).resolve().parent.parent   # project root
+ROOT_DIR = Path(__file__).resolve().parent.parent
 CORE_DIR = ROOT_DIR / "core"
 sys.path.insert(0, str(CORE_DIR))
 
@@ -49,7 +49,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # tighten to your domain in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,40 +87,52 @@ async def analyse(
     patient_age: Optional[int] = Form(None),
     burn_cause: Optional[str] = Form(None),
 ):
-    # ── Validate ─────────────────────────────────────────────────────────
+    t0 = time.time()
+    print(f"[1] /api/analyse called  file={file.filename}  k={k}", flush=True)
+
     if file.content_type not in ("image/jpeg", "image/png", "image/jpg"):
         raise HTTPException(400, "Only JPG and PNG images are accepted.")
     if not (5 <= k <= 30):
         raise HTTPException(400, "Block size k must be between 5 and 30.")
 
     raw = await file.read()
-    if len(raw) > 20 * 1024 * 1024:          # 20 MB cap
+    print(f"[2] file read  bytes={len(raw)}  ({time.time()-t0:.1f}s)", flush=True)
+    if len(raw) > 20 * 1024 * 1024:
         raise HTTPException(413, "Image too large. Maximum size is 20 MB.")
 
-    # ── Decode ───────────────────────────────────────────────────────────
     try:
         img_bgr = decode_image(raw)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    print(f"[3] decoded  shape={img_bgr.shape}  ({time.time()-t0:.1f}s)", flush=True)
 
-    # ── Run pipeline ─────────────────────────────────────────────────────
     rgb, burn_r, depth_r, texture_r = run_full_pipeline(img_bgr, k=k)
+    print(f"[4] pipeline done  grid_shape={burn_r.shape}  ({time.time()-t0:.1f}s)", flush=True)
+
     result = classify_burn(burn_r, depth_r, texture_r)
+    print(f"[5] classified  degree={result['degree']}  ({time.time()-t0:.1f}s)", flush=True)
 
-    # ── Generate grid figures ─────────────────────────────────────────────
     name = patient_id or "case"
-    fig_burn    = overlay_grid_figure(rgb, burn_r,    f"{name} – Burn Mask Grid", k, cmap="Reds")
-    fig_depth   = overlay_grid_figure(rgb, depth_r,   f"{name} – Depth Values",   k, cmap="inferno")
-    fig_texture = overlay_grid_figure(rgb, texture_r, f"{name} – Texture Values", k, cmap="Blues")
 
-    png_burn    = fig_to_png_bytes(fig_burn)
-    png_depth   = fig_to_png_bytes(fig_depth)
+    fig_burn = overlay_grid_figure(rgb, burn_r, f"{name} – Burn Mask Grid", k, cmap="Reds")
+    print(f"[6] burn figure built  ({time.time()-t0:.1f}s)", flush=True)
+    png_burn = fig_to_png_bytes(fig_burn)
+    print(f"[7] burn PNG rendered  bytes={len(png_burn)}  ({time.time()-t0:.1f}s)", flush=True)
+
+    fig_depth = overlay_grid_figure(rgb, depth_r, f"{name} – Depth Values", k, cmap="inferno")
+    print(f"[8] depth figure built  ({time.time()-t0:.1f}s)", flush=True)
+    png_depth = fig_to_png_bytes(fig_depth)
+    print(f"[9] depth PNG rendered  bytes={len(png_depth)}  ({time.time()-t0:.1f}s)", flush=True)
+
+    fig_texture = overlay_grid_figure(rgb, texture_r, f"{name} – Texture Values", k, cmap="Blues")
+    print(f"[10] texture figure built  ({time.time()-t0:.1f}s)", flush=True)
     png_texture = fig_to_png_bytes(fig_texture)
+    print(f"[11] texture PNG rendered  bytes={len(png_texture)}  ({time.time()-t0:.1f}s)", flush=True)
 
     def b64(data: bytes) -> str:
         return base64.b64encode(data).decode()
 
-    return JSONResponse({
+    response = JSONResponse({
         "status":       "ok",
         "timestamp":    datetime.utcnow().isoformat(),
         "patient_id":   patient_id,
@@ -140,6 +152,8 @@ async def analyse(
             "texture":   b64(png_texture),
         },
     })
+    print(f"[12] /api/analyse SUCCESS  total={time.time()-t0:.1f}s", flush=True)
+    return response
 
 
 # ── Catch-all frontend route (MUST stay at bottom, after all /api/* routes) ──

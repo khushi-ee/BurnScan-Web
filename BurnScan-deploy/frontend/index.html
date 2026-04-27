@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>BurnScan · AIIMS Paediatric Burns</title>
+<style>
+/* ── Reset & tokens ────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:        #0d0f14;
+  --bg2:       #141720;
+  --bg3:       #1e2130;
+  --border:    #2a2d38;
+  --text:      #e8e4dc;
+  --muted:     #6b7280;
+  --accent:    #ff5a1f;
+  --accent-h:  #e04a14;
+  --red:       #e53e3e;
+  --orange:    #dd6b20;
+  --green:     #38a169;
+  --radius:    12px;
+  --font-body: 'DM Sans', sans-serif;
+  --font-disp: 'DM Serif Display', serif;
+}
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-body);
+  font-size:15px;
+  line-height:1.6;
+  min-height:100vh;
+}
+
+/* ── Topbar ───────────────────────────────────────────────────────────── */
+.topbar{
+  position:sticky;top:0;z-index:200;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 40px;
+  background:var(--bg);
+  border-bottom:1px solid var(--bg3);
+  backdrop-filter:blur(8px);
+}
+.logo{font-family:var(--font-disp);font-size:22px;color:var(--accent);letter-spacing:-0.5px}
+.logo span{color:var(--text)}
+.topbar-right{display:flex;align-items:center;gap:20px;font-size:13px;color:var(--muted)}
+.topbar-right b{color:var(--text)}
+#btn-logout{
+  background:none;border:1px solid var(--border);color:var(--muted);
+  padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;
+  font-family:var(--font-body);transition:border-color .15s,color .15s;
+}
+#btn-logout:hover{border-color:var(--accent);color:var(--text)}
+
+/* ── Login overlay ────────────────────────────────────────────────────── */
+#login-overlay{
+  position:fixed;inset:0;z-index:999;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse 90% 70% at 50% 0%,#1a0a02,var(--bg) 70%);
+}
+.login-card{
+  width:100%;max-width:400px;
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:48px 40px;
+  box-shadow:0 40px 80px rgba(0,0,0,.6);
+  animation:fadeUp .35s ease both;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.login-logo{font-family:var(--font-disp);font-size:38px;color:var(--accent);letter-spacing:-1px}
+.login-sub{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;
+           color:var(--muted);margin-bottom:36px;margin-top:4px}
+.field-label{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
+             color:#9ca3af;display:block;margin-bottom:6px;margin-top:16px}
+.login-card input{
+  width:100%;padding:11px 14px;
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:10px;color:var(--text);font-family:var(--font-body);font-size:14px;
+  outline:none;transition:border-color .15s;
+}
+.login-card input:focus{border-color:var(--accent)}
+#login-error{
+  display:none;margin-top:12px;padding:10px 14px;
+  background:#2d1010;border:1px solid #7f2020;border-radius:8px;
+  color:#fc8181;font-size:13px;
+}
+.btn-primary{
+  width:100%;margin-top:24px;padding:12px;
+  background:var(--accent);color:#fff;border:none;border-radius:10px;
+  font-family:var(--font-body);font-size:14px;font-weight:600;cursor:pointer;
+  transition:background .15s;letter-spacing:.2px;
+}
+.btn-primary:hover{background:var(--accent-h)}
+.login-hint{margin-top:28px;padding-top:20px;border-top:1px solid var(--bg3);
+            font-size:12px;color:#4b5563;text-align:center;line-height:1.8}
+.login-hint code{background:var(--bg3);padding:2px 6px;border-radius:4px;color:#9ca3af}
+
+/* ── Main app (hidden until logged in) ───────────────────────────────── */
+#app{display:none}
+
+/* ── Hero / upload section ────────────────────────────────────────────── */
+.hero{padding:56px 40px 36px;max-width:840px;margin:0 auto}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;
+         color:var(--accent);margin-bottom:12px}
+.hero-title{font-family:var(--font-disp);font-size:42px;color:var(--text);
+            letter-spacing:-1.2px;line-height:1.12;margin-bottom:10px}
+.hero-body{font-size:14px;color:var(--muted);line-height:1.75;max-width:500px;margin-bottom:36px}
+
+.controls{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;margin-bottom:32px}
+.control-group{display:flex;flex-direction:column;gap:6px}
+.control-label{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+
+/* drop zone */
+#drop-zone{
+  flex:1;min-width:280px;
+  border:1.5px dashed var(--border);border-radius:16px;
+  padding:36px 24px;text-align:center;cursor:pointer;
+  transition:border-color .2s,background .2s;
+  background:var(--bg2);
+}
+#drop-zone:hover,#drop-zone.dragover{border-color:var(--accent);background:#1a1410}
+#drop-zone input{display:none}
+.drop-icon{font-size:28px;margin-bottom:8px;opacity:.6}
+.drop-text{font-size:13px;color:var(--muted)}
+.drop-text b{color:var(--text)}
+#file-name{margin-top:8px;font-size:12px;color:var(--accent)}
+
+/* k slider */
+.slider-wrap{min-width:180px}
+input[type=range]{
+  -webkit-appearance:none;width:100%;height:4px;
+  background:var(--bg3);border-radius:2px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--accent);cursor:pointer;border:2px solid var(--bg);
+}
+#k-val{color:var(--accent);font-weight:600;margin-left:6px}
+
+/* analyse button */
+#btn-analyse{
+  padding:11px 28px;background:var(--accent);color:#fff;border:none;
+  border-radius:10px;font-family:var(--font-body);font-weight:600;font-size:14px;
+  cursor:pointer;transition:background .15s;white-space:nowrap;align-self:flex-end;
+}
+#btn-analyse:hover{background:var(--accent-h)}
+#btn-analyse:disabled{background:var(--bg3);color:var(--muted);cursor:not-allowed}
+
+/* ── Spinner ──────────────────────────────────────────────────────────── */
+#spinner{
+  display:none;align-items:center;gap:12px;padding:20px 0;
+  font-size:13px;color:var(--muted);
+}
+.spin{
+  width:20px;height:20px;border:2px solid var(--bg3);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Results ──────────────────────────────────────────────────────────── */
+#results{display:none;padding:0 40px 60px;max-width:1400px;margin:0 auto}
+
+.results-header{
+  padding:28px 0 24px;border-bottom:1px solid var(--bg3);margin-bottom:36px;
+}
+.degree-pill{
+  display:inline-block;padding:7px 18px;border-radius:100px;
+  font-size:13px;font-weight:600;letter-spacing:.3px;margin-bottom:16px;
+}
+.stat-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:4px}
+.stat-block{
+  flex:1;min-width:130px;background:var(--bg2);
+  border:1px solid var(--bg3);border-radius:var(--radius);padding:18px 20px;
+}
+.stat-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
+            color:var(--muted);margin-bottom:6px}
+.stat-value{font-family:var(--font-disp);font-size:30px;color:var(--text);line-height:1}
+.stat-unit{font-size:13px;color:var(--muted);font-family:var(--font-body);margin-left:3px}
+
+.grid-section-label{
+  font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:14px;
+}
+.grid-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+@media(max-width:800px){.grid-row{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.grid-row{grid-template-columns:1fr}}
+
+.grid-card{
+  background:var(--bg2);border:1px solid var(--bg3);
+  border-radius:var(--radius);overflow:hidden;
+}
+.grid-card-label{
+  padding:10px 14px;font-size:11px;font-weight:600;letter-spacing:1.5px;
+  text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--bg3);
+}
+.grid-card img{width:100%;display:block;aspect-ratio:1;object-fit:contain;background:#000}
+
+/* downloads */
+.dl-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.btn-dl{
+  padding:9px 18px;background:var(--bg3);color:var(--text);
+  border:1px solid var(--border);border-radius:9px;font-family:var(--font-body);
+  font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;
+  transition:background .15s,border-color .15s;
+}
+.btn-dl:hover{background:var(--border);border-color:var(--accent)}
+
+/* explanation */
+.explain-box{
+  background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);
+  padding:18px 20px;font-size:13px;color:var(--muted);line-height:1.7;margin-top:24px;
+}
+.explain-box b{color:var(--text)}
+
+/* disclaimer */
+.disclaimer{
+  margin-top:32px;padding:16px 20px;
+  background:#1a1209;border:1px solid #3d2a10;
+  border-radius:var(--radius);font-size:12px;color:#b0936a;line-height:1.65;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN OVERLAY ══════════════════════════════════════════════════════ -->
+<div id="login-overlay">
+  <div class="login-card">
+    <div class="login-logo">BurnScan</div>
+    <div class="login-sub">AIIMS · Paediatric Burns Unit</div>
+
+    <label class="field-label" for="inp-user">Username</label>
+    <input id="inp-user" type="text" placeholder="e.g. dr.sharma" autocomplete="username"/>
+
+    <label class="field-label" for="inp-pass">Password</label>
+    <input id="inp-pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+
+    <div id="login-error">Invalid username or password.</div>
+
+    <button class="btn-primary" id="btn-login">Sign in →</button>
+
+    <div class="login-hint">
+      Demo logins:<br>
+      <code>dr.sharma</code> / <code>aiims2024</code> &nbsp;·&nbsp;
+      <code>dr.mehta</code> / <code>burns123</code>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP SHELL ══════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="logo">Burn<span>Scan</span></div>
+    <div class="topbar-right">
+      <span>Signed in as <b id="user-label">—</b></span>
+      <button id="btn-logout">Sign out</button>
+    </div>
+  </div>
+
+  <!-- Hero / upload -->
+  <div class="hero">
+    <div class="eyebrow">Paediatric Burns Analysis · AIIMS New Delhi</div>
+    <div class="hero-title">Upload wound image</div>
+    <div class="hero-body">
+      Upload a clinical photograph of the burn wound. The pipeline extracts colour,
+      depth, and texture features and renders annotated block-average grid overlays —
+      identical to the Colab notebook output.
+    </div>
+
+    <div class="controls">
+
+      <!-- Drop zone -->
+      <div id="drop-zone">
+        <input id="file-input" type="file" accept="image/jpeg,image/png"/>
+        <div class="drop-icon">🖼</div>
+        <div class="drop-text"><b>Click to upload</b> or drag &amp; drop</div>
+        <div class="drop-text" style="font-size:11px;margin-top:4px">JPG · PNG · max 20 MB</div>
+        <div id="file-name"></div>
+      </div>
+
+      <!-- k slider -->
+      <div class="control-group slider-wrap">
+        <span class="control-label">Block size k <span id="k-val">10</span></span>
+        <input id="k-slider" type="range" min="5" max="30" step="5" value="10"/>
+      </div>
+
+      <!-- Patient meta -->
+      <div class="control-group">
+        <span class="control-label">Patient ID</span>
+        <input id="inp-pid" type="text" placeholder="e.g. P-2024-001"
+               style="background:var(--bg3);border:1px solid var(--border);
+                      border-radius:10px;color:var(--text);padding:10px 13px;
+                      font-family:var(--font-body);font-size:13px;outline:none;width:160px"/>
+      </div>
+      <div class="control-group">
+        <span class="control-label">Age (yrs)</span>
+        <input id="inp-age" type="number" min="0" max="17" placeholder="5"
+               style="background:var(--bg3);border:1px solid var(--border);
+                      border-radius:10px;color:var(--text);padding:10px 13px;
+                      font-family:var(--font-body);font-size:13px;outline:none;width:100px"/>
+      </div>
+
+      <button id="btn-analyse" disabled>Analyse →</button>
+    </div>
+
+    <!-- Spinner -->
+    <div id="spinner">
+      <div class="spin"></div>
+      <span>Running feature extraction pipeline…</span>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <div class="results-header">
+      <div id="degree-pill" class="degree-pill">—</div>
+      <div class="stat-row">
+        <div class="stat-block">
+          <div class="stat-label">Burn degree</div>
+          <div class="stat-value" id="stat-degree">—</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-label">Confidence <sup title="Heuristic score, not a statistical probability">ⓘ</sup></div>
+          <div class="stat-value" id="stat-conf">—<span class="stat-unit">%</span></div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-label">Est. TBSA <sup title="Placeholder — needs Lund & Browder body map">ⓘ</sup></div>
+          <div class="stat-value" id="stat-tbsa">—<span class="stat-unit">%</span></div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-label">Block size</div>
+          <div class="stat-value" id="stat-k">—<span class="stat-unit">px</span></div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-label">Timestamp</div>
+          <div class="stat-value" id="stat-ts" style="font-size:18px">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid images -->
+    <div class="grid-section-label">Grid overlay outputs</div>
+    <div class="grid-row">
+      <div class="grid-card">
+        <div class="grid-card-label">Original</div>
+        <img id="img-orig" src="" alt="Original"/>
+      </div>
+      <div class="grid-card">
+        <div class="grid-card-label">🔴 Burn mask grid</div>
+        <img id="img-burn" src="" alt="Burn mask"/>
+      </div>
+      <div class="grid-card">
+        <div class="grid-card-label">🌑 Depth values</div>
+        <img id="img-depth" src="" alt="Depth"/>
+      </div>
+      <div class="grid-card">
+        <div class="grid-card-label">🔷 Texture values</div>
+        <img id="img-texture" src="" alt="Texture"/>
+      </div>
+    </div>
+
+    <!-- Downloads -->
+    <div class="dl-row" id="dl-row"></div>
+
+    <!-- Explanation -->
+    <div class="explain-box" id="explain-box">—</div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      ⚠️ <strong>Research prototype only.</strong>
+      This tool has not been clinically validated and must not be used as the sole basis
+      for any clinical decision. All outputs must be reviewed and confirmed by a qualified
+      paediatric burns specialist. AIIMS New Delhi · Paediatric Surgery Department.
+    </div>
+
+  </div><!-- /results -->
+
+</div><!-- /app -->
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+// Point this to wherever your FastAPI is running.
+// In Colab + ngrok: set this to the ngrok URL, e.g. "https://xxxx.ngrok-free.app"
+// In production: use your actual domain, e.g. "https://api.burnscan.aiims.ac.in"
+// When frontend is served by the same FastAPI server (Railway), use same origin.
+// For local dev, override with: const API_BASE = "http://localhost:8000";
+const API_BASE = window.location.origin;
+
+// ── Credentials (same as Streamlit version) ──────────────────────────────
+const USERS = {
+  "dr.sharma": { password: "aiims2024", role: "Doctor",   name: "Dr. Priya Sharma"  },
+  "dr.mehta":  { password: "burns123",  role: "Resident", name: "Dr. Arjun Mehta"   },
+  "admin":     { password: "admin123",  role: "Admin",    name: "Admin"              },
+};
+
+// ── Login ─────────────────────────────────────────────────────────────────
+const loginOverlay = document.getElementById("login-overlay");
+const appEl        = document.getElementById("app");
+const errEl        = document.getElementById("login-error");
+
+function tryLogin() {
+  const u = document.getElementById("inp-user").value.trim();
+  const p = document.getElementById("inp-pass").value;
+  if (USERS[u] && USERS[u].password === p) {
+    loginOverlay.style.display = "none";
+    appEl.style.display = "block";
+    document.getElementById("user-label").textContent =
+      `${USERS[u].name} · ${USERS[u].role}`;
+    errEl.style.display = "none";
+  } else {
+    errEl.style.display = "block";
+  }
+}
+
+document.getElementById("btn-login").addEventListener("click", tryLogin);
+["inp-user","inp-pass"].forEach(id =>
+  document.getElementById(id).addEventListener("keydown", e => {
+    if (e.key === "Enter") tryLogin();
+  })
+);
+document.getElementById("btn-logout").addEventListener("click", () => {
+  loginOverlay.style.display = "flex";
+  appEl.style.display = "none";
+  document.getElementById("results").style.display = "none";
+  document.getElementById("inp-user").value = "";
+  document.getElementById("inp-pass").value = "";
+  selectedFile = null;
+  document.getElementById("file-name").textContent = "";
+  document.getElementById("btn-analyse").disabled = true;
+});
+
+// ── File input / drag-drop ────────────────────────────────────────────────
+let selectedFile = null;
+const dropZone  = document.getElementById("drop-zone");
+const fileInput = document.getElementById("file-input");
+
+dropZone.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  setFile(e.dataTransfer.files[0]);
+});
+
+function setFile(f) {
+  if (!f) return;
+  selectedFile = f;
+  document.getElementById("file-name").textContent = f.name;
+  document.getElementById("btn-analyse").disabled = false;
+
+  // Show original preview immediately
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById("img-orig").src = e.target.result;
+  };
+  reader.readAsDataURL(f);
+}
+
+// ── k slider ──────────────────────────────────────────────────────────────
+const kSlider = document.getElementById("k-slider");
+kSlider.addEventListener("input", () => {
+  document.getElementById("k-val").textContent = kSlider.value;
+});
+
+// ── Analyse ───────────────────────────────────────────────────────────────
+document.getElementById("btn-analyse").addEventListener("click", async () => {
+  if (!selectedFile) return;
+
+  const spinner = document.getElementById("spinner");
+  const results = document.getElementById("results");
+  const btn     = document.getElementById("btn-analyse");
+
+  btn.disabled    = true;
+  spinner.style.display = "flex";
+  results.style.display = "none";
+
+  const fd = new FormData();
+  fd.append("file",        selectedFile);
+  fd.append("k",           kSlider.value);
+  fd.append("patient_id",  document.getElementById("inp-pid").value || "");
+  fd.append("patient_age", document.getElementById("inp-age").value || "");
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/analyse`, { method:"POST", body:fd });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${resp.status}`);
+    }
+    const data = await resp.json();
+    renderResults(data);
+  } catch(e) {
+    alert("Analysis failed: " + e.message);
+  } finally {
+    spinner.style.display = "none";
+    btn.disabled = false;
+  }
+});
+
+// ── Render results ────────────────────────────────────────────────────────
+function renderResults(data) {
+  const c  = data.classification;
+  const ts = new Date(data.timestamp);
+
+  // Pill
+  const pill = document.getElementById("degree-pill");
+  pill.textContent = c.degree;
+  pill.style.background  = c.colour + "22";
+  pill.style.color        = c.colour;
+  pill.style.border       = `1px solid ${c.colour}55`;
+
+  // Stats
+  document.getElementById("stat-degree").textContent = c.degree.split(" ")[0] + " " + (c.degree.split(" ")[1] || "");
+  document.getElementById("stat-conf").innerHTML   = `${Math.round(c.confidence*100)}<span class="stat-unit">%</span>`;
+  document.getElementById("stat-tbsa").innerHTML   = `${c.tbsa_pct}<span class="stat-unit">%</span>`;
+  document.getElementById("stat-k").innerHTML      = `${data.block_size_k}<span class="stat-unit">px</span>`;
+  document.getElementById("stat-ts").textContent   = ts.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+
+  // Grid images (base64 from API)
+  const grids = data.grids;
+  document.getElementById("img-burn").src    = "data:image/png;base64," + grids.burn_mask;
+  document.getElementById("img-depth").src   = "data:image/png;base64," + grids.depth;
+  document.getElementById("img-texture").src = "data:image/png;base64," + grids.texture;
+
+  // Download buttons
+  const dlRow = document.getElementById("dl-row");
+  dlRow.innerHTML = "";
+  const dlItems = [
+    ["⬇ Burn mask",  grids.burn_mask,  "burn_mask.png"],
+    ["⬇ Depth grid", grids.depth,      "depth_grid.png"],
+    ["⬇ Texture",    grids.texture,    "texture_grid.png"],
+  ];
+  dlItems.forEach(([label, b64, fname]) => {
+    const a = document.createElement("a");
+    a.className = "btn-dl";
+    a.textContent = label;
+    a.href = "data:image/png;base64," + b64;
+    a.download = fname;
+    dlRow.appendChild(a);
+  });
+
+  // Explanation
+  document.getElementById("explain-box").innerHTML =
+    `<b>Analysis detail:</b><br>${c.explanation}<br><br>
+     <span style="color:#4b5563;font-size:12px">
+       ⓘ Confidence is a heuristic score, not a validated probability.
+       TBSA is a placeholder — implement Lund &amp; Browder chart for accurate paediatric TBSA.
+     </span>`;
+
+  document.getElementById("results").style.display = "block";
+  document.getElementById("results").scrollIntoView({behavior:"smooth"});
+}
+</script>
+</body>
+</html>

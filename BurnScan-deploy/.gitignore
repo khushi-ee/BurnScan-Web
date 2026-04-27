@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/
+
+# Frontend build artefacts
+node_modules/
+dist/
+build/
+
+# Logs
+npm-debug.log*
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Large files
+*.zip
+*.tar
+*.gz
+
+# ML model weights (large binaries — store on HuggingFace / S3 instead)
+*.h5
+*.pt
+*.pth
+*.pkl
+*.onnx
+
+# Data
+data/
+datasets/

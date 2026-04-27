@@ -27,11 +27,12 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # ── Make core/ importable ─────────────────────────────────────────────────
-ROOT_DIR = Path(__file__).resolve().parent.parent
+# Works whether launched from project root or from backend/ subdirectory
+ROOT_DIR = Path(__file__).resolve().parent.parent   # project root
 CORE_DIR = ROOT_DIR / "core"
 sys.path.insert(0, str(CORE_DIR))
 
-from pipeline import (
+from pipeline import (                              # noqa: E402
     classify_burn,
     decode_image,
     fig_to_png_bytes,
@@ -48,29 +49,35 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],          # tighten to your domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Paths ────────────────────────────────────────────────────────────────
+# ── Serve frontend static files ───────────────────────────────────────────
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
-# ─────────────────────────────────────────────────────────────────────────
-# ✅ API ROUTES FIRST (IMPORTANT)
-# ─────────────────────────────────────────────────────────────────────────
+
+@app.get("/", include_in_schema=False)
+def serve_index():
+    index = FRONTEND_DIR / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse({"status": "BurnScan API running — no frontend found."})
+
+
+# ── Health ────────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
 def health():
-    return {
-        "status": "ok",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
+
+# ── Analyse ───────────────────────────────────────────────────────────────
 
 @app.post("/api/analyse")
 async def analyse(
@@ -87,7 +94,7 @@ async def analyse(
         raise HTTPException(400, "Block size k must be between 5 and 30.")
 
     raw = await file.read()
-    if len(raw) > 20 * 1024 * 1024:
+    if len(raw) > 20 * 1024 * 1024:          # 20 MB cap
         raise HTTPException(413, "Image too large. Maximum size is 20 MB.")
 
     # ── Decode ───────────────────────────────────────────────────────────
@@ -102,75 +109,54 @@ async def analyse(
 
     # ── Generate grid figures ─────────────────────────────────────────────
     name = patient_id or "case"
+    fig_burn    = overlay_grid_figure(rgb, burn_r,    f"{name} – Burn Mask Grid", k, cmap="Reds")
+    fig_depth   = overlay_grid_figure(rgb, depth_r,   f"{name} – Depth Values",   k, cmap="inferno")
+    fig_texture = overlay_grid_figure(rgb, texture_r, f"{name} – Texture Values", k, cmap="Blues")
 
-    fig_burn = overlay_grid_figure(
-        rgb, burn_r, f"{name} – Burn Mask Grid", k, cmap="Reds"
-    )
-    fig_depth = overlay_grid_figure(
-        rgb, depth_r, f"{name} – Depth Values", k, cmap="inferno"
-    )
-    fig_texture = overlay_grid_figure(
-        rgb, texture_r, f"{name} – Texture Values", k, cmap="Blues"
-    )
-
-    png_burn = fig_to_png_bytes(fig_burn)
-    png_depth = fig_to_png_bytes(fig_depth)
+    png_burn    = fig_to_png_bytes(fig_burn)
+    png_depth   = fig_to_png_bytes(fig_depth)
     png_texture = fig_to_png_bytes(fig_texture)
 
     def b64(data: bytes) -> str:
         return base64.b64encode(data).decode()
 
     return JSONResponse({
-        "status": "ok",
-        "timestamp": datetime.utcnow().isoformat(),
-        "patient_id": patient_id,
-        "patient_age": patient_age,
-        "burn_cause": burn_cause,
+        "status":       "ok",
+        "timestamp":    datetime.utcnow().isoformat(),
+        "patient_id":   patient_id,
+        "patient_age":  patient_age,
+        "burn_cause":   burn_cause,
         "block_size_k": k,
         "classification": {
-            "degree": result["degree"],
-            "confidence": result["confidence"],
-            "tbsa_pct": result["tbsa_pct"],
-            "colour": result["colour"],
+            "degree":      result["degree"],
+            "confidence":  result["confidence"],
+            "tbsa_pct":    result["tbsa_pct"],
+            "colour":      result["colour"],
             "explanation": result["explanation"],
         },
         "grids": {
             "burn_mask": b64(png_burn),
-            "depth": b64(png_depth),
-            "texture": b64(png_texture),
+            "depth":     b64(png_depth),
+            "texture":   b64(png_texture),
         },
     })
 
-# ─────────────────────────────────────────────────────────────────────────
-# 🌐 FRONTEND ROUTES (AFTER API)
-# ─────────────────────────────────────────────────────────────────────────
 
-@app.get("/", include_in_schema=False)
-def serve_index():
-    index = FRONTEND_DIR / "index.html"
-    if index.exists():
-        return FileResponse(str(index))
-    return JSONResponse({"status": "BurnScan API running — no frontend found."})
-
+# ── Catch-all frontend route (MUST stay at bottom, after all /api/* routes) ──
 
 @app.get("/{full_path:path}", include_in_schema=False)
 def serve_frontend(full_path: str):
-    # 🚫 Prevent API routes from being hijacked
-    if full_path.startswith("api"):
-        raise HTTPException(404, "Not found")
-
+    """Catch-all: serve any static file from frontend/, fall back to index.html."""
     requested = FRONTEND_DIR / full_path
     if requested.exists() and requested.is_file():
         return FileResponse(str(requested))
-
     index = FRONTEND_DIR / "index.html"
     if index.exists():
         return FileResponse(str(index))
-
     raise HTTPException(404, "Not found")
 
 
 # ── Entry point (local dev) ───────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

@@ -38,10 +38,7 @@ GridArr = np.ndarray   # H×W float, block-averaged feature map
 # 1. Image I/O
 # ════════════════════════════════════════════════════════════════════════════
 
-# Maximum allowed dimension for input images (memory cap on Render free tier).
-# Larger images are downscaled while preserving aspect ratio. 1024px is more
-# than enough for visual burn-feature extraction.
-MAX_INPUT_DIM = 1024
+
 
 
 def decode_image(raw: bytes) -> ImgBGR:

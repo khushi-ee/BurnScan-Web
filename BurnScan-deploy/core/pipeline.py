@@ -45,26 +45,11 @@ MAX_INPUT_DIM = 1024
 
 
 def decode_image(raw: bytes) -> ImgBGR:
-    """Decode raw JPEG/PNG bytes → BGR ndarray.  Raises ValueError on failure.
-
-    Large images are automatically downscaled to MAX_INPUT_DIM on the longest
-    side. This keeps peak memory under ~150 MB even on phone-camera uploads,
-    which is required to stay within the 512 MB limit of Render's free tier.
-    """
+    """Decode raw JPEG/PNG bytes → BGR ndarray.  Raises ValueError on failure."""
     arr = np.frombuffer(raw, dtype=np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Could not decode image — unsupported format or corrupt file.")
-
-    # ── Downscale if too large ───────────────────────────────────────────
-    h, w = img.shape[:2]
-    longest = max(h, w)
-    if longest > MAX_INPUT_DIM:
-        scale = MAX_INPUT_DIM / longest
-        new_w = int(w * scale)
-        new_h = int(h * scale)
-        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
-
     return img
 
 

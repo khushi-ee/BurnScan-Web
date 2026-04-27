@@ -385,180 +385,207 @@ input[type=range]::-webkit-slider-thumb{
 </div><!-- /app -->
 
 <script>
-// ── Config ────────────────────────────────────────────────────────────────
-// Point this to wherever your FastAPI is running.
-// In Colab + ngrok: set this to the ngrok URL, e.g. "https://xxxx.ngrok-free.app"
-// In production: use your actual domain, e.g. "https://api.burnscan.aiims.ac.in"
-// When frontend is served by the same FastAPI server (Railway), use same origin.
-// For local dev, override with: const API_BASE = "http://localhost:8000";
-const API_BASE = window.location.origin;
-
-// ── Credentials (same as Streamlit version) ──────────────────────────────
-const USERS = {
-  "dr.sharma": { password: "aiims2024", role: "Doctor",   name: "Dr. Priya Sharma"  },
-  "dr.mehta":  { password: "burns123",  role: "Resident", name: "Dr. Arjun Mehta"   },
-  "admin":     { password: "admin123",  role: "Admin",    name: "Admin"              },
-};
-
-// ── Login ─────────────────────────────────────────────────────────────────
-const loginOverlay = document.getElementById("login-overlay");
-const appEl        = document.getElementById("app");
-const errEl        = document.getElementById("login-error");
-
-function tryLogin() {
-  const u = document.getElementById("inp-user").value.trim();
-  const p = document.getElementById("inp-pass").value;
-  if (USERS[u] && USERS[u].password === p) {
-    loginOverlay.style.display = "none";
-    appEl.style.display = "block";
-    document.getElementById("user-label").textContent =
-      `${USERS[u].name} · ${USERS[u].role}`;
-    errEl.style.display = "none";
-  } else {
-    errEl.style.display = "block";
-  }
-}
-
-document.getElementById("btn-login").addEventListener("click", tryLogin);
-["inp-user","inp-pass"].forEach(id =>
-  document.getElementById(id).addEventListener("keydown", e => {
-    if (e.key === "Enter") tryLogin();
-  })
-);
-document.getElementById("btn-logout").addEventListener("click", () => {
-  loginOverlay.style.display = "flex";
-  appEl.style.display = "none";
-  document.getElementById("results").style.display = "none";
-  document.getElementById("inp-user").value = "";
-  document.getElementById("inp-pass").value = "";
-  selectedFile = null;
-  document.getElementById("file-name").textContent = "";
-  document.getElementById("btn-analyse").disabled = true;
-});
-
-// ── File input / drag-drop ────────────────────────────────────────────────
-let selectedFile = null;
-const dropZone  = document.getElementById("drop-zone");
-const fileInput = document.getElementById("file-input");
-
-dropZone.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
-
-dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
-dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("dragover"));
-dropZone.addEventListener("drop", e => {
-  e.preventDefault();
-  dropZone.classList.remove("dragover");
-  setFile(e.dataTransfer.files[0]);
-});
-
-function setFile(f) {
-  if (!f) return;
-  selectedFile = f;
-  document.getElementById("file-name").textContent = f.name;
-  document.getElementById("btn-analyse").disabled = false;
-
-  // Show original preview immediately
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById("img-orig").src = e.target.result;
+  // ── Config ────────────────────────────────────────────────────────────────
+  const API_BASE = window.location.origin;
+  
+  // ── Credentials (demo only — move server-side for production) ────────────
+  const USERS = {
+    "dr.sharma": { password: "aiims2024", role: "Doctor",   name: "Dr. Priya Sharma" },
+    "dr.mehta":  { password: "burns123",  role: "Resident", name: "Dr. Arjun Mehta"  },
+    "admin":     { password: "admin123",  role: "Admin",    name: "Admin"            },
   };
-  reader.readAsDataURL(f);
-}
-
-// ── k slider ──────────────────────────────────────────────────────────────
-const kSlider = document.getElementById("k-slider");
-kSlider.addEventListener("input", () => {
-  document.getElementById("k-val").textContent = kSlider.value;
-});
-
-// ── Analyse ───────────────────────────────────────────────────────────────
-document.getElementById("btn-analyse").addEventListener("click", async () => {
-  if (!selectedFile) return;
-
-  const spinner = document.getElementById("spinner");
-  const results = document.getElementById("results");
-  const btn     = document.getElementById("btn-analyse");
-
-  btn.disabled    = true;
-  spinner.style.display = "flex";
-  results.style.display = "none";
-
-  const fd = new FormData();
-  fd.append("file",        selectedFile);
-  fd.append("k",           kSlider.value);
-  fd.append("patient_id",  document.getElementById("inp-pid").value || "");
-  fd.append("patient_age", document.getElementById("inp-age").value || "");
-
-  try {
-    const resp = await fetch(`${API_BASE}/api/analyse`, { method:"POST", body:fd });
+  
+  // ── Login ─────────────────────────────────────────────────────────────────
+  const loginOverlay = document.getElementById("login-overlay");
+  const appEl        = document.getElementById("app");
+  const errEl        = document.getElementById("login-error");
+  
+  function tryLogin() {
+    const u = document.getElementById("inp-user").value.trim();
+    const p = document.getElementById("inp-pass").value;
+    if (USERS[u] && USERS[u].password === p) {
+      loginOverlay.style.display = "none";
+      appEl.style.display = "block";
+      document.getElementById("user-label").textContent =
+        `${USERS[u].name} · ${USERS[u].role}`;
+      errEl.style.display = "none";
+    } else {
+      errEl.style.display = "block";
+    }
+  }
+  
+  document.getElementById("btn-login").addEventListener("click", tryLogin);
+  ["inp-user","inp-pass"].forEach(id =>
+    document.getElementById(id).addEventListener("keydown", e => {
+      if (e.key === "Enter") tryLogin();
+    })
+  );
+  document.getElementById("btn-logout").addEventListener("click", () => {
+    loginOverlay.style.display = "flex";
+    appEl.style.display = "none";
+    document.getElementById("results").style.display = "none";
+    document.getElementById("inp-user").value = "";
+    document.getElementById("inp-pass").value = "";
+    selectedFile = null;
+    document.getElementById("file-name").textContent = "";
+    document.getElementById("btn-analyse").disabled = true;
+  });
+  
+  // ── File input / drag-drop ────────────────────────────────────────────────
+  let selectedFile = null;
+  const dropZone  = document.getElementById("drop-zone");
+  const fileInput = document.getElementById("file-input");
+  
+  dropZone.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+  
+  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+  dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("dragover"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    setFile(e.dataTransfer.files[0]);
+  });
+  
+  function setFile(f) {
+    if (!f) return;
+    selectedFile = f;
+    document.getElementById("file-name").textContent = f.name;
+    document.getElementById("btn-analyse").disabled = false;
+  
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById("img-orig").src = e.target.result;
+    };
+    reader.readAsDataURL(f);
+  }
+  
+  // ── k slider ──────────────────────────────────────────────────────────────
+  const kSlider = document.getElementById("k-slider");
+  kSlider.addEventListener("input", () => {
+    document.getElementById("k-val").textContent = kSlider.value;
+  });
+  
+  // ── Spinner helper ────────────────────────────────────────────────────────
+  function setSpinnerText(msg) {
+    const el = document.getElementById("spinner-text");
+    if (el) el.textContent = msg;
+  }
+  
+  // ── Helper: build a fresh FormData (a FormData is consumed by fetch, so we
+  //          need a NEW one for every parallel call) ────────────────────────
+  function buildFormData() {
+    const fd = new FormData();
+    fd.append("file",        selectedFile);
+    fd.append("k",           kSlider.value);
+    fd.append("patient_id",  document.getElementById("inp-pid").value || "");
+    fd.append("patient_age", document.getElementById("inp-age").value || "");
+    return fd;
+  }
+  
+  // ── Helper: one analyse call for a single view ──────────────────────────
+  async function callAnalyse(view) {
+    const resp = await fetch(`${API_BASE}/api/analyse?view=${view}`, {
+      method: "POST",
+      body:   buildFormData(),
+    });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error ${resp.status}`);
+      throw new Error(err.detail || `Server error ${resp.status} (view=${view})`);
     }
-    const data = await resp.json();
-    renderResults(data);
-  } catch(e) {
-    alert("Analysis failed: " + e.message);
-  } finally {
-    spinner.style.display = "none";
-    btn.disabled = false;
+    return resp.json();
   }
-});
-
-// ── Render results ────────────────────────────────────────────────────────
-function renderResults(data) {
-  const c  = data.classification;
-  const ts = new Date(data.timestamp);
-
-  // Pill
-  const pill = document.getElementById("degree-pill");
-  pill.textContent = c.degree;
-  pill.style.background  = c.colour + "22";
-  pill.style.color        = c.colour;
-  pill.style.border       = `1px solid ${c.colour}55`;
-
-  // Stats
-  document.getElementById("stat-degree").textContent = c.degree.split(" ")[0] + " " + (c.degree.split(" ")[1] || "");
-  document.getElementById("stat-conf").innerHTML   = `${Math.round(c.confidence*100)}<span class="stat-unit">%</span>`;
-  document.getElementById("stat-tbsa").innerHTML   = `${c.tbsa_pct}<span class="stat-unit">%</span>`;
-  document.getElementById("stat-k").innerHTML      = `${data.block_size_k}<span class="stat-unit">px</span>`;
-  document.getElementById("stat-ts").textContent   = ts.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-
-  // Grid images (base64 from API)
-  const grids = data.grids;
-  document.getElementById("img-burn").src    = "data:image/png;base64," + grids.burn_mask;
-  document.getElementById("img-depth").src   = "data:image/png;base64," + grids.depth;
-  document.getElementById("img-texture").src = "data:image/png;base64," + grids.texture;
-
-  // Download buttons
-  const dlRow = document.getElementById("dl-row");
-  dlRow.innerHTML = "";
-  const dlItems = [
-    ["⬇ Burn mask",  grids.burn_mask,  "burn_mask.png"],
-    ["⬇ Depth grid", grids.depth,      "depth_grid.png"],
-    ["⬇ Texture",    grids.texture,    "texture_grid.png"],
-  ];
-  dlItems.forEach(([label, b64, fname]) => {
-    const a = document.createElement("a");
-    a.className = "btn-dl";
-    a.textContent = label;
-    a.href = "data:image/png;base64," + b64;
-    a.download = fname;
-    dlRow.appendChild(a);
+  
+  // ── Analyse (3 parallel calls, one per overlay) ─────────────────────────
+  document.getElementById("btn-analyse").addEventListener("click", async () => {
+    if (!selectedFile) return;
+  
+    const spinner = document.getElementById("spinner");
+    const results = document.getElementById("results");
+    const btn     = document.getElementById("btn-analyse");
+  
+    btn.disabled         = true;
+    spinner.style.display = "flex";
+    results.style.display = "none";
+    setSpinnerText("Running 3 analyses in parallel…");
+  
+    try {
+      // Fire all three at once. Total wall-clock ≈ slowest single call (~25 s),
+      // not the sum.
+      const [burnData, depthData, textureData] = await Promise.all([
+        callAnalyse("burn"),
+        callAnalyse("depth"),
+        callAnalyse("texture"),
+      ]);
+  
+      // Stitch the three single-view responses into one object that has the
+      // same shape renderResults() already expects.
+      const data = {
+        ...burnData,                              // status, timestamp, classification, …
+        grids: {
+          burn_mask: burnData.grid.png,
+          depth:     depthData.grid.png,
+          texture:   textureData.grid.png,
+        },
+      };
+  
+      renderResults(data);
+    } catch (e) {
+      alert("Analysis failed: " + e.message);
+    } finally {
+      spinner.style.display = "none";
+      btn.disabled          = false;
+    }
   });
-
-  // Explanation
-  document.getElementById("explain-box").innerHTML =
-    `<b>Analysis detail:</b><br>${c.explanation}<br><br>
-     <span style="color:#4b5563;font-size:12px">
-       ⓘ Confidence is a heuristic score, not a validated probability.
-       TBSA is a placeholder — implement Lund &amp; Browder chart for accurate paediatric TBSA.
-     </span>`;
-
-  document.getElementById("results").style.display = "block";
-  document.getElementById("results").scrollIntoView({behavior:"smooth"});
-}
-</script>
+  
+  // ── Render results ────────────────────────────────────────────────────────
+  function renderResults(data) {
+    const c  = data.classification;
+    const ts = new Date(data.timestamp);
+  
+    const pill = document.getElementById("degree-pill");
+    pill.textContent       = c.degree;
+    pill.style.background  = c.colour + "22";
+    pill.style.color       = c.colour;
+    pill.style.border      = `1px solid ${c.colour}55`;
+  
+    document.getElementById("stat-degree").textContent = c.degree.split(" ")[0] + " " + (c.degree.split(" ")[1] || "");
+    document.getElementById("stat-conf").innerHTML     = `${Math.round(c.confidence*100)}<span class="stat-unit">%</span>`;
+    document.getElementById("stat-tbsa").innerHTML     = `${c.tbsa_pct}<span class="stat-unit">%</span>`;
+    document.getElementById("stat-k").innerHTML        = `${data.block_size_k}<span class="stat-unit">px</span>`;
+    document.getElementById("stat-ts").textContent     = ts.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  
+    const grids = data.grids;
+    document.getElementById("img-burn").src    = "data:image/png;base64," + grids.burn_mask;
+    document.getElementById("img-depth").src   = "data:image/png;base64," + grids.depth;
+    document.getElementById("img-texture").src = "data:image/png;base64," + grids.texture;
+  
+    const dlRow = document.getElementById("dl-row");
+    dlRow.innerHTML = "";
+    const dlItems = [
+      ["⬇ Burn mask",  grids.burn_mask,  "burn_mask.png"],
+      ["⬇ Depth grid", grids.depth,      "depth_grid.png"],
+      ["⬇ Texture",    grids.texture,    "texture_grid.png"],
+    ];
+    dlItems.forEach(([label, b64, fname]) => {
+      const a = document.createElement("a");
+      a.className   = "btn-dl";
+      a.textContent = label;
+      a.href        = "data:image/png;base64," + b64;
+      a.download    = fname;
+      dlRow.appendChild(a);
+    });
+  
+    document.getElementById("explain-box").innerHTML =
+      `<b>Analysis detail:</b><br>${c.explanation}<br><br>
+       <span style="color:#4b5563;font-size:12px">
+         ⓘ Confidence is a heuristic score, not a validated probability.
+         TBSA is a placeholder — implement Lund &amp; Browder chart for accurate paediatric TBSA.
+       </span>`;
+  
+    document.getElementById("results").style.display = "block";
+    document.getElementById("results").scrollIntoView({behavior:"smooth"});
+  }
+  </script>
 </body>
 </html>

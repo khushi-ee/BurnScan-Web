@@ -1,380 +1,294 @@
 """
 core/pipeline.py
 ================
-Self-contained BurnScan image-analysis pipeline.
-Replicates the Colab notebook logic without any external repo dependency.
+BurnScan — image-analysis pipeline aligned with Colab notebook.
+
+Colab logic preserved exactly:
+  • LAB-a + HSV-S threshold + morph-close  → burn_mask
+  • L-channel masked by burn_mask           → depth
+  • LBP (P=8, R=1, uniform) on masked grey → texture
+  • block_average reshape trick             → numeric grid arrays
+  • make_grid_figure with per-cell labels   → numeric values on overlay
 
 Public API (imported by backend/main.py)
 -----------------------------------------
-decode_image(raw_bytes)           → img_bgr  (np.ndarray H×W×3 uint8)
-run_full_pipeline(img_bgr, k)     → (rgb, burn_r, depth_r, texture_r)
-overlay_grid_figure(rgb, r, title, k) → matplotlib Figure
-classify_burn(burn_r, depth_r, texture_r) → dict
-fig_to_png_bytes(fig)             → bytes
+decode_image(raw_bytes)                          → img_bgr
+run_pipeline(img_bgr, k)                         → (rgb, burn_r, depth_r, texture_r)
+make_grid_figure(rgb, values, title, k, cmap,
+                 vmin, vmax)                     → plt.Figure
+classify_burn(burn_r, depth_r, texture_r)        → dict
+fig_to_bytes(fig)                                → bytes
 """
 
 from __future__ import annotations
 
 import io
-import math
 from typing import Tuple
 
 import cv2
 import matplotlib
-matplotlib.use("Agg")            # non-interactive backend — safe on server
+matplotlib.use("Agg")
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-from skimage.feature import graycomatrix, graycoprops
+from skimage.feature import local_binary_pattern
 
-
-# ── Type aliases ─────────────────────────────────────────────────────────────
-ImgBGR  = np.ndarray   # H×W×3 uint8, BGR colour order (OpenCV default)
-ImgRGB  = np.ndarray   # H×W×3 uint8, RGB colour order
-GridArr = np.ndarray   # H×W float, block-averaged feature map
-
-
-# ── Performance tuning ──────────────────────────────────────────────────────
-# Largest dimension permitted for the input image. Anything bigger is
-# downscaled while preserving aspect ratio. Keeps memory + per-block work
-# bounded on small free-tier instances (Render 512 MB / 1 vCPU).
-# 1024 px is more than enough for visual burn-feature extraction.
-MAX_INPUT_DIM = 1024
+# Type aliases
+ImgBGR  = np.ndarray   # H×W×3 uint8, BGR
+ImgRGB  = np.ndarray   # H×W×3 uint8, RGB
+GridArr = np.ndarray   # rows×cols float
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 1. Image I/O
+# 1. I/O
 # ════════════════════════════════════════════════════════════════════════════
 
 def decode_image(raw: bytes) -> ImgBGR:
-    """Decode raw JPEG/PNG bytes → BGR ndarray.
-
-    Large images (longest side > MAX_INPUT_DIM px) are downscaled with
-    INTER_AREA — the highest-quality interpolation for shrinking. This is
-    what keeps a single /api/analyse call under Render's 100 s proxy
-    timeout. Raises ValueError on decode failure.
-    """
+    """Decode raw JPEG/PNG bytes → BGR ndarray. Raises ValueError on failure."""
     arr = np.frombuffer(raw, dtype=np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Could not decode image — unsupported format or corrupt file.")
-
-    h, w = img.shape[:2]
-    print(
-        f"[pipeline] decode_image  original={img.shape}  "
-        f"size_MB={img.nbytes/1024/1024:.2f}",
-        flush=True,
-    )
-
-    longest = max(h, w)
-    if longest > MAX_INPUT_DIM:
-        scale = MAX_INPUT_DIM / longest
-        new_w = int(w * scale)
-        new_h = int(h * scale)
-        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
-        print(
-            f"[pipeline] decode_image  downscaled_to={img.shape}  "
-            f"size_MB={img.nbytes/1024/1024:.2f}",
-            flush=True,
-        )
-
     return img
 
 
-def fig_to_png_bytes(fig: plt.Figure) -> bytes:
-    """Render a matplotlib Figure to PNG bytes and close the figure.
-
-    DPI intentionally low (80) to keep render time well under Render's
-    100 s proxy timeout on free-tier CPU. Visually indistinguishable in a
-    browser from the original 120 DPI output.
-    """
+def fig_to_bytes(fig: plt.Figure) -> bytes:
+    """Render a matplotlib Figure to PNG bytes and close it."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", dpi=80)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
+                facecolor=fig.get_facecolor())
     plt.close(fig)
     buf.seek(0)
     return buf.read()
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 2. Feature extraction helpers
+# 2. Core pipeline — exact Colab notebook logic
 # ════════════════════════════════════════════════════════════════════════════
 
-def _block_grid(img_bgr: ImgBGR, k: int, fn) -> GridArr:
+def block_average(img: np.ndarray, k: int) -> GridArr:
     """
-    Divide img_bgr into k×k non-overlapping blocks and apply fn(block_bgr)
-    to each, collecting scalar results into a 2-D float array.
+    Divide a 2-D array into k×k non-overlapping blocks and return block means.
+    Exact Colab block_average() — reshape trick, no loops.
     """
-    H, W = img_bgr.shape[:2]
-    rows = H // k
-    cols = W // k
-    grid = np.zeros((rows, cols), dtype=float)
-    for r in range(rows):
-        for c in range(cols):
-            block = img_bgr[r * k:(r + 1) * k, c * k:(c + 1) * k]
-            grid[r, c] = fn(block)
-    return grid
+    h, w = img.shape
+    h2   = h // k
+    w2   = w // k
+    return img[:h2 * k, :w2 * k].reshape(h2, k, w2, k).mean(axis=(1, 3))
 
 
-# ── Burn-mask feature ─────────────────────────────────────────────────────
-
-def _burn_score(block_bgr: np.ndarray) -> float:
+def extract_features(img_bgr: ImgBGR):
     """
-    Heuristic burn probability for a BGR block.
-    Score ranges ~[0, 1].  Higher → more likely burned tissue.
+    Exact Colab extract_features():
+      1. Resize to 256×256
+      2. BGR → RGB → HSV → LAB
+      3. Burn mask: LAB-a > (mean + 0.8·std)  AND  HSV-S > mean
+         + morphological closing (7×7 kernel)
+      4. Depth   : L-channel masked by burn_mask
+      5. Texture : LBP(P=8, R=1, uniform) on grey masked by burn_mask,
+                   normalised to 0-255
 
-    Strategy:
-      1. Convert to HSV.
-      2. Red/orange hue range → active burn / erythema.
-      3. Dark pixels (charring) also contribute.
-      4. Desaturation contributes (pale/white blistered tissue).
+    Returns (rgb, burn_mask, depth, texture) — all 256×256 uint8.
     """
-    hsv   = cv2.cvtColor(block_bgr, cv2.COLOR_BGR2HSV).astype(float)
-    H_ch  = hsv[:, :, 0]          # 0-179 in OpenCV
-    S_ch  = hsv[:, :, 1] / 255.0  # 0-1
-    V_ch  = hsv[:, :, 2] / 255.0  # 0-1
+    img  = cv2.resize(img_bgr, (256, 256))
+    rgb  = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    hsv  = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    lab  = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
 
-    n = H_ch.size
+    _, S, _  = cv2.split(hsv)
+    L, A, _  = cv2.split(lab)
+    gray     = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
 
-    # Red/orange mask (hue 0-15 or 160-179 in OpenCV, i.e. 0-30° or 320-360°)
-    red_mask = ((H_ch <= 15) | (H_ch >= 160)) & (S_ch > 0.3) & (V_ch > 0.2)
-    red_frac = red_mask.sum() / n
+    meanA = float(np.mean(A))
+    stdA  = float(np.std(A))
+    meanS = float(np.mean(S))
 
-    # Charring: very dark pixels
-    char_mask = V_ch < 0.18
-    char_frac = char_mask.sum() / n
+    # Burn mask — identical condition to Colab
+    burn_mask = ((A > meanA + 0.8 * stdA) & (S > meanS)).astype(np.uint8) * 255
+    burn_mask = cv2.morphologyEx(burn_mask, cv2.MORPH_CLOSE,
+                                  np.ones((7, 7), np.uint8))
 
-    # Blistering / pale tissue: low saturation, medium-high value
-    blister_mask = (S_ch < 0.25) & (V_ch > 0.5)
-    blister_frac = blister_mask.sum() / n
+    depth     = cv2.bitwise_and(L, L, mask=burn_mask)
+    burn_gray = cv2.bitwise_and(gray, gray, mask=burn_mask)
+    lbp       = local_binary_pattern(burn_gray, 8, 1, "uniform")
+    texture   = cv2.normalize(lbp, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
-    score = 0.5 * red_frac + 0.35 * char_frac + 0.15 * blister_frac
-    return float(np.clip(score, 0.0, 1.0))
+    return rgb, burn_mask, depth, texture
 
 
-# ── Depth feature ─────────────────────────────────────────────────────────
-
-def _depth_score(block_bgr: np.ndarray) -> float:
+def run_pipeline(img_bgr: ImgBGR, k: int = 10) -> Tuple[ImgRGB, GridArr, GridArr, GridArr]:
     """
-    Proxy for burn depth based on colour and intensity.
-    • Darker / charred → deeper (score → 1).
-    • Red / erythematous → superficial (score → 0.3–0.5).
-    • Pale / white → intermediate–deep (score → 0.6–0.8).
-    """
-    hsv  = cv2.cvtColor(block_bgr, cv2.COLOR_BGR2HSV).astype(float)
-    V    = hsv[:, :, 2].mean() / 255.0   # mean brightness
-    S    = hsv[:, :, 1].mean() / 255.0   # mean saturation
-
-    # Charring: very dark
-    if V < 0.20:
-        return float(np.clip(1.0 - V / 0.20 * 0.2, 0.8, 1.0))
-
-    # Pale / white (blister / full-thickness)
-    if S < 0.20 and V > 0.55:
-        return 0.65
-
-    # Red / erythema (superficial)
-    return float(np.clip(0.5 * (1.0 - V) + 0.1, 0.1, 0.55))
-
-
-# ── Texture feature ───────────────────────────────────────────────────────
-
-def _texture_score(block_bgr: np.ndarray) -> float:
-    """
-    GLCM-based texture heterogeneity (contrast) normalised to [0, 1].
-    Higher → more irregular surface (deeper burn / eschar).
-    """
-    gray  = cv2.cvtColor(block_bgr, cv2.COLOR_BGR2GRAY)
-    # Quantise to 8 levels to speed up GLCM
-    gray8 = (gray // 32).astype(np.uint8)
-    if gray8.shape[0] < 2 or gray8.shape[1] < 2:
-        return 0.0
-    try:
-        glcm    = graycomatrix(gray8, distances=[1], angles=[0], levels=8,
-                               symmetric=True, normed=True)
-        contrast = graycoprops(glcm, "contrast")[0, 0]
-        # Empirically contrast sits in ~[0, 20]; clip and normalise
-        return float(np.clip(contrast / 20.0, 0.0, 1.0))
-    except Exception:
-        # Fall back to normalised std-dev if GLCM fails
-        return float(np.clip(gray.std() / 128.0, 0.0, 1.0))
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# 3. Full pipeline
-# ════════════════════════════════════════════════════════════════════════════
-
-def run_full_pipeline(
-    img_bgr: ImgBGR,
-    k: int = 10,
-) -> Tuple[ImgRGB, GridArr, GridArr, GridArr]:
-    """
-    Run the three-channel feature extraction pipeline.
-
-    Parameters
-    ----------
-    img_bgr : np.ndarray   BGR image (H×W×3 uint8)
-    k       : int          block size in pixels (5–30)
+    Full pipeline. Matches Colab run_pipeline() exactly.
 
     Returns
     -------
-    rgb      : np.ndarray  RGB version of the input (for display)
-    burn_r   : np.ndarray  block grid of burn scores
-    depth_r  : np.ndarray  block grid of depth scores
-    texture_r: np.ndarray  block grid of texture scores
+    rgb           : 256×256×3 uint8 RGB (for display)
+    burn_r_binary : binary grid (0 or 1) — block burned or not
+    depth_r       : float grid  — mean L-channel per block
+    texture_r     : float grid  — mean LBP value per block
     """
-    rgb       = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    burn_r    = _block_grid(img_bgr, k, _burn_score)
-    depth_r   = _block_grid(img_bgr, k, _depth_score)
-    texture_r = _block_grid(img_bgr, k, _texture_score)
-    return rgb, burn_r, depth_r, texture_r
+    rgb, burn_mask, depth, texture = extract_features(img_bgr)
+
+    burn_r    = block_average(burn_mask.astype(float), k)
+    depth_r   = block_average(depth.astype(float),    k)
+    texture_r = block_average(texture.astype(float),  k)
+
+    burn_r_binary = (burn_r > 0).astype(np.uint8)   # matches Colab
+    return rgb, burn_r_binary, depth_r, texture_r
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 4. Visualisation — overlay_grid_figure
+# 3. Visualisation — with numeric cell labels (matches Colab output)
 # ════════════════════════════════════════════════════════════════════════════
 
-_CMAP_BURN    = "Reds"
-_CMAP_DEPTH   = "inferno"
-_CMAP_TEXTURE = "Blues"
-
-
-def overlay_grid_figure(
+def make_grid_figure(
     rgb: ImgRGB,
-    grid: GridArr,
+    values: GridArr,
     title: str,
     k: int,
     cmap: str = "Reds",
+    vmin=None,
+    vmax=None,
 ) -> plt.Figure:
     """
-    Render the original image with a semi-transparent block-average heat-map
-    overlay.
+    Render rgb (256×256) with semi-transparent block heat-map overlay.
+    Each block shows its integer value as a white label — exact Colab output.
 
-    Implementation note
-    -------------------
-    Uses a SINGLE matplotlib `imshow()` of the grid as an RGBA image, rather
-    than drawing one Rectangle patch per block. On free-tier CPU this is
-    ~500× faster (≈0.05 s vs ≈25 s for a typical grid) while producing
-    visually identical output. Required to stay under Render's 100 s HTTP
-    proxy timeout.
+    Skips zero-value blocks on the burn-mask grid (cmap == 'Reds'),
+    matching the `if val == 0 and cmap == 'Reds': continue` Colab logic.
     """
-    H, W       = rgb.shape[:2]
-    rows, cols = grid.shape
+    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
+    fig.patch.set_facecolor("#0d0f14")
+    ax.set_facecolor("#0d0f14")
+    ax.imshow(rgb, interpolation="lanczos")
 
-    fig, ax = plt.subplots(figsize=(7, 7 * H / W), dpi=80)
-    ax.imshow(rgb)
+    h, w   = values.shape
+    vmin_  = float(values.min()) if vmin is None else float(vmin)
+    vmax_  = float(values.max()) if vmax is None else float(vmax)
+    cm     = plt.get_cmap(cmap)
 
-    # Build heatmap as an RGBA array — ONE imshow replaces the patch loop.
-    cmap_obj  = plt.get_cmap(cmap)
-    norm_grid = (grid - grid.min()) / (grid.max() - grid.min() + 1e-8)
-    heatmap   = cmap_obj(norm_grid)              # rows × cols × 4 (RGBA in 0-1)
-    heatmap[..., 3] = 0.30 + 0.45 * norm_grid    # alpha rises with intensity
+    for i in range(h):
+        for j in range(w):
+            val = float(values[i, j])
 
-    ax.imshow(
-        heatmap,
-        extent=(0, cols * k, rows * k, 0),
-        interpolation="nearest",
-        zorder=2,
-    )
+            # Skip empty blocks on burn-mask grid (Colab behaviour)
+            if val == 0 and cmap == "Reds":
+                continue
 
-    ax.set_title(title, fontsize=11, pad=8)
+            norm   = (val - vmin_) / (vmax_ - vmin_ + 1e-6)
+            colour = cm(norm)
+
+            rect = mpatches.Rectangle(
+                (j * k, i * k), k, k,
+                linewidth=0.3,
+                edgecolor=(1, 1, 1, 0.15),
+                facecolor=(*colour[:3], 0.45),
+            )
+            ax.add_patch(rect)
+
+            # Numeric label on every block
+            ax.text(
+                j * k + k / 2,
+                i * k + k / 2,
+                f"{int(val)}",
+                color="white",
+                fontsize=3.5,
+                ha="center",
+                va="center",
+                fontweight="bold",
+            )
+
+    ax.set_xlim(0, 256)
+    ax.set_ylim(256, 0)
+    ax.set_title(title, fontsize=7, color="#9ca3af", pad=5)
     ax.axis("off")
 
     sm = plt.cm.ScalarMappable(
         cmap=cmap,
-        norm=plt.Normalize(vmin=grid.min(), vmax=grid.max()),
+        norm=plt.Normalize(vmin=vmin_, vmax=vmax_),
     )
     sm.set_array([])
-    fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.02)
+    cb = fig.colorbar(sm, ax=ax, fraction=0.035, pad=0.02)
+    cb.ax.tick_params(labelsize=5, colors="#6b7280")
+    cb.outline.set_edgecolor("#2a2d38")
 
-    fig.tight_layout()
+    plt.tight_layout(pad=0.5)
     return fig
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 5. Classification
+# 4. Classification — exact Colab scoring thresholds
 # ════════════════════════════════════════════════════════════════════════════
 
 def classify_burn(
-    burn_r:    GridArr,
-    depth_r:   GridArr,
+    burn_r: GridArr,
+    depth_r: GridArr,
     texture_r: GridArr,
 ) -> dict:
     """
-    Heuristic burn classification from the three grid feature maps.
+    Heuristic classifier. Exact Colab classify_burn() thresholds:
+      mean_d < 70   → +2,  mean_d < 120  → +1
+      mean_t > 160  → +2,  mean_t > 110  → +1
+      score >= 4    → 3rd Degree
+      score >= 2    → 2nd Degree
+      else          → 1st Degree
+      TBSA          → round(cov * 90, 1)
 
-    Returns a dict with keys:
-      degree, confidence, tbsa_pct, colour, explanation
+    Returns dict: degree, confidence, tbsa_pct, colour, explanation
     """
-    burn_mean    = float(burn_r.mean())
-    depth_mean   = float(depth_r.mean())
-    texture_mean = float(texture_r.mean())
+    active = burn_r > 0
 
-    # ── Composite score ──────────────────────────────────────────────────
-    composite = (
-        0.50 * burn_mean
-        + 0.30 * depth_mean
-        + 0.20 * texture_mean
-    )
+    if active.sum() == 0:
+        return {
+            "degree":      "No burn detected",
+            "confidence":  0.0,
+            "tbsa_pct":    0.0,
+            "colour":      "#6b7280",
+            "explanation": (
+                "No burned regions detected. "
+                "The image does not contain characteristic burn signatures."
+            ),
+        }
 
-    # ── TBSA estimate (placeholder — blocks above threshold / total) ─────
-    burn_threshold = 0.25
-    burned_blocks  = (burn_r > burn_threshold).sum()
-    total_blocks   = burn_r.size
-    tbsa_raw       = burned_blocks / total_blocks * 100.0
-    # Paediatric surface: scale to realistic range (cap at 60%)
-    tbsa_pct       = round(min(tbsa_raw * 0.6, 60.0), 1)
+    mean_d = float(depth_r[active].mean())
+    mean_t = float(texture_r[active].mean())
+    cov    = float(active.mean())
 
-    # ── Degree classification ────────────────────────────────────────────
-    if composite < 0.15:
-        degree     = "Normal / No burn detected"
-        confidence = 0.90 - composite
-        colour     = "#38a169"       # green
+    # Exact Colab scoring
+    score = 0
+    if mean_d < 70:      score += 2
+    elif mean_d < 120:   score += 1
+    if mean_t > 160:     score += 2
+    elif mean_t > 110:   score += 1
+
+    tbsa_pct = round(cov * 90, 1)
+
+    if score >= 4:
+        degree     = "3rd Degree"
+        confidence = min(0.55 + cov * 0.2, 0.85)
+        colour     = "#e53e3e"
         explanation = (
-            "Feature scores across all channels are low. "
-            "The image does not show characteristic burn signatures. "
-            "If clinical concern persists, review under adequate lighting."
+            f"High texture score ({mean_t:.1f} > 160) and low L-channel depth "
+            f"({mean_d:.1f} < 70) indicate full-thickness destruction. "
+            "Urgent surgical review — early excision and grafting expected."
         )
-
-    elif composite < 0.30:
-        degree     = "Superficial (1st degree)"
-        confidence = 0.75 + 0.1 * (composite - 0.15) / 0.15
-        colour     = "#d97706"       # amber
+    elif score >= 2:
+        degree     = "2nd Degree"
+        confidence = min(0.50 + cov * 0.2, 0.80)
+        colour     = "#dd6b20"
         explanation = (
-            f"Burn score {burn_mean:.2f} indicates erythema with intact epidermis. "
-            f"Depth score {depth_mean:.2f} is consistent with superficial injury. "
-            "Typical management: cool water irrigation, non-adherent dressings. "
-            "Expect healing in 5–7 days."
-        )
-
-    elif composite < 0.50:
-        degree     = "Superficial Partial Thickness (2nd degree)"
-        confidence = 0.70 + 0.10 * (composite - 0.30) / 0.20
-        colour     = "#f97316"       # orange
-        explanation = (
-            f"Burn score {burn_mean:.2f} and texture score {texture_mean:.2f} "
-            "suggest blistering / partial dermal involvement. "
-            "Wound may be painful with moist appearance. "
+            f"Moderate texture ({mean_t:.1f}) and depth ({mean_d:.1f}) scores "
+            "suggest partial-thickness burn with blistering / dermal involvement. "
             "Management: silvadene or hydrocolloid dressings; review at 48 h."
         )
-
-    elif composite < 0.70:
-        degree     = "Deep Partial Thickness (2nd–3rd degree)"
-        confidence = 0.68 + 0.08 * (composite - 0.50) / 0.20
-        colour     = "#ef4444"       # red
-        explanation = (
-            f"High depth score ({depth_mean:.2f}) indicates reticular dermis "
-            f"involvement. Texture irregularity ({texture_mean:.2f}) may indicate "
-            "eschar formation. Likely requires surgical debridement and skin grafting."
-        )
-
     else:
-        degree     = "Full Thickness (3rd / 4th degree)"
-        confidence = 0.72 + 0.08 * min((composite - 0.70) / 0.30, 1.0)
-        colour     = "#7c3aed"       # purple
+        degree     = "1st Degree"
+        confidence = min(0.60 + cov * 0.15, 0.80)
+        colour     = "#38a169"
         explanation = (
-            f"All three channels elevated (burn {burn_mean:.2f}, "
-            f"depth {depth_mean:.2f}, texture {texture_mean:.2f}). "
-            "Suggests full-thickness destruction of epidermis and dermis. "
-            "Urgent surgical review required. Consider early excision and grafting."
+            f"Low texture ({mean_t:.1f}) and depth ({mean_d:.1f}) scores "
+            "indicate superficial erythema with intact epidermis. "
+            "Management: cool water irrigation, non-adherent dressings."
         )
 
     return {

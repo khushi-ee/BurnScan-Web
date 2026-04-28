@@ -17,5 +17,9 @@ env
 .vscode
 node_modules
 *.log
+Procfile
 Procfile.txt
 runtime.txt
+render.yaml
+nixpacks.toml
+railway.toml

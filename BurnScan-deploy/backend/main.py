@@ -2,20 +2,24 @@
 backend/main.py
 ===============
 FastAPI backend for BurnScan.
+Uses core/pipeline.py aligned with the Colab notebook.
 
 Endpoints
 ---------
 POST /api/analyse?view=burn|depth|texture|all
-    Upload image → JSON + base64 PNG overlay(s).
-      • view=burn|depth|texture → returns a single overlay
-        (frontend fires three parallel calls; each finishes in ~25 s,
-         comfortably under Render's 100 s HTTP proxy timeout).
-      • view=all (default)      → returns all three overlays in one response
-        (kept for legacy / direct-API use).
-GET  /api/health     – liveness probe.
-GET  /               – serves frontend/index.html.
-GET  /{path}         – serves any static file from frontend/, falls back to
-                       index.html (catch-all, MUST stay LAST).
+    • view=burn|depth|texture  → single grid PNG (frontend fires 3 parallel
+                                  fetch() calls simultaneously — one per view,
+                                  each resolves as it finishes → smoother UI)
+    • view=all (default)       → all three grids in one response (fallback)
+
+    All responses include:
+      - classification result (degree, confidence, tbsa_pct, colour, explanation)
+      - grid PNG(s) as base64, rendered with per-cell numeric labels
+        (exact Colab make_grid_figure output)
+
+GET  /api/health  — liveness probe
+GET  /            — serves frontend/index.html
+GET  /{path}      — static file fallback (MUST stay last)
 """
 
 from __future__ import annotations
@@ -41,16 +45,16 @@ sys.path.insert(0, str(CORE_DIR))
 from pipeline import (                              # noqa: E402
     classify_burn,
     decode_image,
-    fig_to_png_bytes,
-    overlay_grid_figure,
-    run_full_pipeline,
+    fig_to_bytes,
+    make_grid_figure,
+    run_pipeline,
 )
 
 # ── App ───────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="BurnScan API",
     description="AIIMS Paediatric Burns Analysis API",
-    version="1.2.0",
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -61,7 +65,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Serve frontend static files ───────────────────────────────────────────
+# ── Frontend static files ─────────────────────────────────────────────────
 FRONTEND_DIR = ROOT_DIR / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
@@ -81,18 +85,17 @@ def health():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# Analyse — one endpoint, three "views"
-# ══════════════════════════════════════════════════════════════════════════
-
-# view name → (title suffix, matplotlib colour-map, response key for "name")
+# ── View config ───────────────────────────────────────────────────────────
+# Cmaps match Colab exactly: Reds / inferno_r / viridis
+# vmin/vmax for burn is fixed at 0,1 because burn_r is binary (0 or 1)
 _VIEW_CONFIG = {
-    "burn":    ("Burn Mask Grid", "Reds",    "burn_mask"),
-    "depth":   ("Depth Values",   "inferno", "depth"),
-    "texture": ("Texture Values", "Blues",   "texture"),
+    "burn":    ("Burn Mask Grid", "Reds",      "burn_mask", 0,    1   ),
+    "depth":   ("Depth Values",   "inferno_r", "depth",     None, None),
+    "texture": ("Texture Values", "viridis",   "texture",   None, None),
 }
 
 
+# ── Analyse ───────────────────────────────────────────────────────────────
 @app.post("/api/analyse")
 async def analyse(
     file: UploadFile = File(...),
@@ -118,22 +121,42 @@ async def analyse(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    # ── Feature pipeline (always produces all three grids) ──────────────
-    rgb, burn_r, depth_r, texture_r = run_full_pipeline(img_bgr, k=k)
-    classification = classify_burn(burn_r, depth_r, texture_r)
+    # ── Pipeline (Colab-aligned) ──────────────────────────────────────────
+    # run_pipeline:
+    #   - resizes to 256×256
+    #   - LAB-a + HSV-S → burn_mask (morph closed)
+    #   - L-channel masked → depth
+    #   - LBP (P=8,R=1,uniform) masked → texture
+    #   - block_average (reshape trick, no loops) on each
+    #   - returns burn_r as binary (0 or 1) grid — exact Colab
+    rgb, burn_r, depth_r, texture_r = run_pipeline(img_bgr, k=k)
+    result = classify_burn(burn_r, depth_r, texture_r)
 
-    grids_by_view = {"burn": burn_r, "depth": depth_r, "texture": texture_r}
-
-    def b64(data: bytes) -> str:
-        return base64.b64encode(data).decode()
+    grids_data = {
+        "burn":    burn_r,
+        "depth":   depth_r,
+        "texture": texture_r,
+    }
 
     def render(view_key: str) -> str:
-        title_suffix, cmap, _ = _VIEW_CONFIG[view_key]
-        title = f"{patient_id or 'case'} – {title_suffix}"
-        fig   = overlay_grid_figure(rgb, grids_by_view[view_key], title, k, cmap=cmap)
-        return b64(fig_to_png_bytes(fig))
+        """
+        Render one grid → base64 PNG.
+        make_grid_figure draws per-cell numeric int(val) labels on every
+        block — exact Colab output. Skips zero blocks on burn grid.
+        """
+        title_suffix, cmap, _, vmin, vmax = _VIEW_CONFIG[view_key]
+        fig = make_grid_figure(
+            rgb,
+            grids_data[view_key],
+            f"{patient_id or 'case'} – {title_suffix}",
+            k,
+            cmap,
+            vmin,
+            vmax,
+        )
+        return base64.b64encode(fig_to_bytes(fig)).decode()
 
-    # ── Common response fields ───────────────────────────────────────────
+    # ── Common fields in every response ───────────────────────────────────
     common = {
         "status":       "ok",
         "timestamp":    datetime.utcnow().isoformat(),
@@ -142,26 +165,38 @@ async def analyse(
         "burn_cause":   burn_cause,
         "block_size_k": k,
         "classification": {
-            "degree":      classification["degree"],
-            "confidence":  classification["confidence"],
-            "tbsa_pct":    classification["tbsa_pct"],
-            "colour":      classification["colour"],
-            "explanation": classification["explanation"],
+            "degree":      result["degree"],
+            "confidence":  result["confidence"],
+            "tbsa_pct":    result["tbsa_pct"],
+            "colour":      result["colour"],
+            "explanation": result["explanation"],
         },
     }
 
-    # ── Single-view response (parallel-calls pattern) ────────────────────
+    # ── Single-view response — parallel calls pattern ─────────────────────
+    # The frontend fires these three fetch() calls simultaneously:
+    #
+    #   const [burn, depth, texture] = await Promise.all([
+    #     fetch("/api/analyse?view=burn",    { method:"POST", body:fd }),
+    #     fetch("/api/analyse?view=depth",   { method:"POST", body:fd }),
+    #     fetch("/api/analyse?view=texture", { method:"POST", body:fd }),
+    #   ]);
+    #
+    # Each resolves independently as soon as its grid is rendered,
+    # so the UI can display each image the moment it arrives rather
+    # than waiting for all three to finish together.
     if view in _VIEW_CONFIG:
+        _, _, response_key, _, _ = _VIEW_CONFIG[view]
         return JSONResponse({
             **common,
             "view": view,
             "grid": {
-                "name": _VIEW_CONFIG[view][2],
+                "name": response_key,
                 "png":  render(view),
             },
         })
 
-    # ── Legacy "all" response ────────────────────────────────────────────
+    # ── "all" response — all three grids in one call (fallback) ──────────
     return JSONResponse({
         **common,
         "grids": {
@@ -172,10 +207,9 @@ async def analyse(
     })
 
 
-# ── Catch-all frontend route (MUST stay at bottom, after every /api/* route)
+# ── Catch-all frontend route — MUST stay at the very bottom ───────────────
 @app.get("/{full_path:path}", include_in_schema=False)
 def serve_frontend(full_path: str):
-    """Serve any static file from frontend/, fall back to index.html."""
     requested = FRONTEND_DIR / full_path
     if requested.exists() and requested.is_file():
         return FileResponse(str(requested))

@@ -1,3 +1,15 @@
+---
+title: BurnScan
+emoji: 🔥
+colorFrom: orange
+colorTo: red
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: AIIMS Paediatric Burn Analyser — colour, depth & texture
+---
+
 # 🔥 BurnScan — AIIMS Paediatric Burns Analysis
 
 AI-assisted burn wound analysis tool for AIIMS Paediatric Surgery.  
@@ -25,7 +37,27 @@ BurnScan/
 
 ---
 
-## Deploy to Railway (one-click)
+## Deploy to Hugging Face Spaces (recommended — free, always-on)
+
+1. Sign in at [huggingface.co](https://huggingface.co) → **New Space**.
+2. Choose **Space SDK = Docker** → **Blank** template → set visibility.
+3. Clone the empty Space repo locally and copy the contents of this folder into it:
+   ```bash
+   git clone https://huggingface.co/spaces/<your-username>/<space-name>
+   cd <space-name>
+   # copy backend/, core/, frontend/, Dockerfile, requirements.txt, README.md here
+   git add .
+   git commit -m "Initial BurnScan deploy"
+   git push
+   ```
+4. HF builds the Docker image and your app goes live at
+   `https://<your-username>-<space-name>.hf.space`.
+
+The Space stays **always-on** on the free CPU Basic tier — no sleeping, no 502 cold-start errors.
+
+---
+
+## Deploy to Railway (alternative)
 
 1. Push this folder to a GitHub repository.
 2. Go to [railway.com](https://railway.com) → **New Project** → **Deploy from GitHub Repo**.

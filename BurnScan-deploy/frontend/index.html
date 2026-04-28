@@ -287,11 +287,32 @@ input[type=range]::-webkit-slider-thumb{
 .ctrl-input:focus{border-color:var(--accent)}
 
 @media(max-width:900px){
-  .landing-wrap{grid-template-columns:1fr}
-  .landing-right{position:static;height:auto;border-top:1px solid var(--bg3)}
-  .landing-left{border-right:none;padding:48px 24px 40px}
-  .hero-title{font-size:42px}
-  .landing-right{padding:40px 24px 60px}
+  .landing-wrap{display:flex;flex-direction:column;min-height:auto}
+  .landing-right{
+    order:-1;
+    position:static;height:auto;
+    border-top:none;
+    border-bottom:1px solid var(--bg3);
+    padding:32px 22px 28px;
+  }
+  .landing-left{
+    border-right:none;
+    padding:36px 22px 48px;
+  }
+  .login-card .login-logo{font-size:28px}
+  .login-card .login-tagline{margin-bottom:22px}
+  .field-label{margin-top:14px}
+  .login-hint{margin-top:20px;padding-top:16px}
+  .hero-title{font-size:38px;letter-spacing:-1.5px}
+  .hero-sub{margin-bottom:36px}
+}
+
+@media(max-width:480px){
+  .topbar{padding:14px 18px}
+  .landing-right{padding:24px 18px 22px}
+  .landing-left{padding:30px 18px 40px}
+  .hero-title{font-size:32px}
+  .login-card .login-logo{font-size:26px}
 }
 </style>
 </head>

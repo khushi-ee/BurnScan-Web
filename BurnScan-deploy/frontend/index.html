@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>BurnScan · AIIMS Paediatric Burns</title>
+<title>BurnScan · Paediatric Burn Analyser</title>
 <style>
-/* ── Reset & tokens ────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:        #0d0f14;
@@ -17,13 +18,11 @@
   --accent:    #ff5a1f;
   --accent-h:  #e04a14;
   --red:       #e53e3e;
-  --orange:    #dd6b20;
   --green:     #38a169;
   --radius:    12px;
   --font-body: 'DM Sans', sans-serif;
   --font-disp: 'DM Serif Display', serif;
 }
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
 
 html{scroll-behavior:smooth}
 body{
@@ -35,14 +34,14 @@ body{
   min-height:100vh;
 }
 
-/* ── Topbar ───────────────────────────────────────────────────────────── */
+/* ── Topbar ── */
 .topbar{
   position:sticky;top:0;z-index:200;
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 40px;
-  background:var(--bg);
+  background:rgba(13,15,20,0.92);
   border-bottom:1px solid var(--bg3);
-  backdrop-filter:blur(8px);
+  backdrop-filter:blur(12px);
 }
 .logo{font-family:var(--font-disp);font-size:22px;color:var(--accent);letter-spacing:-0.5px}
 .logo span{color:var(--text)}
@@ -55,58 +54,160 @@ body{
 }
 #btn-logout:hover{border-color:var(--accent);color:var(--text)}
 
-/* ── Login overlay ────────────────────────────────────────────────────── */
-#login-overlay{
-  position:fixed;inset:0;z-index:999;
-  display:flex;align-items:center;justify-content:center;
-  background:radial-gradient(ellipse 90% 70% at 50% 0%,#1a0a02,var(--bg) 70%);
+/* ── LANDING PAGE ── */
+#landing{display:block}
+#app{display:none}
+
+.landing-wrap{
+  display:grid;
+  grid-template-columns:1fr 420px;
+  min-height:calc(100vh - 65px);
+  gap:0;
 }
-.login-card{
-  width:100%;max-width:400px;
+
+/* Left — hero + steps */
+.landing-left{
+  padding:64px 52px 80px;
+  border-right:1px solid var(--bg3);
+  overflow-y:auto;
+}
+
+.eyebrow{
+  font-size:10px;font-weight:500;letter-spacing:3px;text-transform:uppercase;
+  color:var(--accent);margin-bottom:20px;display:flex;align-items:center;gap:10px;
+}
+.eyebrow::after{content:'';display:block;flex:1;height:1px;background:var(--border)}
+
+.hero-title{
+  font-family:var(--font-disp);
+  font-size:58px;letter-spacing:-2.5px;line-height:1.02;
+  color:var(--text);margin-bottom:16px;
+}
+.hero-title em{font-style:italic;color:var(--accent)}
+
+.hero-sub{
+  font-size:15px;color:var(--muted);
+  max-width:480px;margin-bottom:52px;line-height:1.8;
+}
+
+/* Workflow steps */
+.steps-label{
+  font-size:10px;font-weight:500;letter-spacing:3px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:24px;
+}
+
+.steps{display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:18px;overflow:hidden}
+
+.step{
+  display:grid;grid-template-columns:56px 1fr;
+  gap:0;
+  border-bottom:1px solid var(--border);
+  transition:background .18s;
+  position:relative;
+}
+.step:last-child{border-bottom:none}
+.step:hover{background:var(--bg2)}
+
+.step-num-col{
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:22px 0 22px;
+  border-right:1px solid var(--border);
+}
+.step-num{
+  font-family:var(--font-disp);font-size:13px;
+  color:var(--muted);line-height:1;margin-top:3px;
+}
+.step-body-col{padding:20px 24px 20px}
+.step-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:5px}
+.step-desc{font-size:13px;color:var(--muted);line-height:1.6}
+
+.step-pills{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.pill{
+  display:inline-block;padding:3px 10px;border-radius:100px;
+  font-size:11px;font-weight:500;letter-spacing:.2px;
+}
+.pill-green{background:#0d2318;color:#4ade80;border:1px solid #173a26}
+.pill-orange{background:#1f1108;color:#fb923c;border:1px solid #4d2c0d}
+.pill-blue{background:#0c1929;color:#60a5fa;border:1px solid #152e52}
+.pill-purple{background:#160f2a;color:#c084fc;border:1px solid #2d1d55}
+.pill-accent{background:#200d03;color:#ff5a1f;border:1px solid #4d1e08}
+
+.cred-inline{
+  display:inline-flex;align-items:center;gap:6px;margin-top:10px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+  padding:7px 12px;font-size:12px;
+}
+.cred-inline .k{color:var(--muted);margin-right:2px}
+.cred-inline code{color:var(--text);font-size:11px;background:var(--bg2);padding:2px 7px;border-radius:5px}
+
+/* Right — login panel */
+.landing-right{
+  padding:52px 40px;
+  display:flex;align-items:flex-start;
   background:var(--bg2);
-  border:1px solid var(--border);
-  border-radius:20px;
-  padding:48px 40px;
-  box-shadow:0 40px 80px rgba(0,0,0,.6);
-  animation:fadeUp .35s ease both;
+  position:sticky;top:65px;
+  height:calc(100vh - 65px);
+  overflow-y:auto;
 }
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-.login-logo{font-family:var(--font-disp);font-size:38px;color:var(--accent);letter-spacing:-1px}
-.login-sub{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;
-           color:var(--muted);margin-bottom:36px;margin-top:4px}
-.field-label{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
-             color:#9ca3af;display:block;margin-bottom:6px;margin-top:16px}
-.login-card input{
+
+.login-card{width:100%;animation:fadeUp .35s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+.login-card .login-logo{
+  font-family:var(--font-disp);font-size:34px;color:var(--accent);
+  letter-spacing:-1px;margin-bottom:4px;
+}
+.login-card .login-tagline{
+  font-size:11px;font-weight:500;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:36px;
+}
+
+.field-label{
+  font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
+  color:#9ca3af;display:block;margin-bottom:6px;margin-top:18px;
+}
+.login-card input[type=text],
+.login-card input[type=password]{
   width:100%;padding:11px 14px;
   background:var(--bg3);border:1px solid var(--border);
   border-radius:10px;color:var(--text);font-family:var(--font-body);font-size:14px;
   outline:none;transition:border-color .15s;
 }
 .login-card input:focus{border-color:var(--accent)}
+
 #login-error{
   display:none;margin-top:12px;padding:10px 14px;
   background:#2d1010;border:1px solid #7f2020;border-radius:8px;
   color:#fc8181;font-size:13px;
 }
 .btn-primary{
-  width:100%;margin-top:24px;padding:12px;
+  width:100%;margin-top:24px;padding:13px;
   background:var(--accent);color:#fff;border:none;border-radius:10px;
   font-family:var(--font-body);font-size:14px;font-weight:600;cursor:pointer;
-  transition:background .15s;letter-spacing:.2px;
+  transition:background .15s,transform .1s;letter-spacing:.2px;
 }
 .btn-primary:hover{background:var(--accent-h)}
-.login-hint{margin-top:28px;padding-top:20px;border-top:1px solid var(--bg3);
-            font-size:12px;color:#4b5563;text-align:center;line-height:1.8}
-.login-hint code{background:var(--bg3);padding:2px 6px;border-radius:4px;color:#9ca3af}
+.btn-primary:active{transform:scale(.98)}
 
-/* ── Main app (hidden until logged in) ───────────────────────────────── */
-#app{display:none}
+.login-hint{
+  margin-top:28px;padding-top:20px;border-top:1px solid var(--bg3);
+  font-size:12px;color:#4b5563;line-height:1.85;
+}
+.login-hint code{background:var(--bg3);padding:2px 7px;border-radius:4px;color:#9ca3af}
 
-/* ── Hero / upload section ────────────────────────────────────────────── */
+.login-divider{
+  display:flex;align-items:center;gap:10px;margin-top:24px;
+}
+.login-divider::before,.login-divider::after{
+  content:'';flex:1;height:1px;background:var(--bg3);
+}
+.login-divider span{font-size:11px;color:var(--muted)}
+
+/* ── APP (post-login) ── */
 .hero{padding:56px 40px 36px;max-width:840px;margin:0 auto}
-.eyebrow{font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;
+.eyebrow2{font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;
          color:var(--accent);margin-bottom:12px}
-.hero-title{font-family:var(--font-disp);font-size:42px;color:var(--text);
+.hero-title2{font-family:var(--font-disp);font-size:42px;color:var(--text);
             letter-spacing:-1.2px;line-height:1.12;margin-bottom:10px}
 .hero-body{font-size:14px;color:var(--muted);line-height:1.75;max-width:500px;margin-bottom:36px}
 
@@ -114,13 +215,11 @@ body{
 .control-group{display:flex;flex-direction:column;gap:6px}
 .control-label{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
 
-/* drop zone */
 #drop-zone{
   flex:1;min-width:280px;
   border:1.5px dashed var(--border);border-radius:16px;
   padding:36px 24px;text-align:center;cursor:pointer;
-  transition:border-color .2s,background .2s;
-  background:var(--bg2);
+  transition:border-color .2s,background .2s;background:var(--bg2);
 }
 #drop-zone:hover,#drop-zone.dragover{border-color:var(--accent);background:#1a1410}
 #drop-zone input{display:none}
@@ -129,7 +228,6 @@ body{
 .drop-text b{color:var(--text)}
 #file-name{margin-top:8px;font-size:12px;color:var(--accent)}
 
-/* k slider */
 .slider-wrap{min-width:180px}
 input[type=range]{
   -webkit-appearance:none;width:100%;height:4px;
@@ -141,7 +239,6 @@ input[type=range]::-webkit-slider-thumb{
 }
 #k-val{color:var(--accent);font-weight:600;margin-left:6px}
 
-/* analyse button */
 #btn-analyse{
   padding:11px 28px;background:var(--accent);color:#fff;border:none;
   border-radius:10px;font-family:var(--font-body);font-weight:600;font-size:14px;
@@ -150,131 +247,238 @@ input[type=range]::-webkit-slider-thumb{
 #btn-analyse:hover{background:var(--accent-h)}
 #btn-analyse:disabled{background:var(--bg3);color:var(--muted);cursor:not-allowed}
 
-/* ── Spinner ──────────────────────────────────────────────────────────── */
-#spinner{
-  display:none;align-items:center;gap:12px;padding:20px 0;
-  font-size:13px;color:var(--muted);
-}
-.spin{
-  width:20px;height:20px;border:2px solid var(--bg3);
-  border-top-color:var(--accent);border-radius:50%;
-  animation:spin .7s linear infinite;
-}
+#spinner{display:none;align-items:center;gap:12px;padding:20px 0;font-size:13px;color:var(--muted)}
+.spin{width:20px;height:20px;border:2px solid var(--bg3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Results ──────────────────────────────────────────────────────────── */
 #results{display:none;padding:0 40px 60px;max-width:1400px;margin:0 auto}
-
-.results-header{
-  padding:28px 0 24px;border-bottom:1px solid var(--bg3);margin-bottom:36px;
-}
-.degree-pill{
-  display:inline-block;padding:7px 18px;border-radius:100px;
-  font-size:13px;font-weight:600;letter-spacing:.3px;margin-bottom:16px;
-}
+.results-header{padding:28px 0 24px;border-bottom:1px solid var(--bg3);margin-bottom:36px}
+.degree-pill{display:inline-block;padding:7px 18px;border-radius:100px;font-size:13px;font-weight:600;letter-spacing:.3px;margin-bottom:16px}
 .stat-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:4px}
-.stat-block{
-  flex:1;min-width:130px;background:var(--bg2);
-  border:1px solid var(--bg3);border-radius:var(--radius);padding:18px 20px;
-}
-.stat-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
-            color:var(--muted);margin-bottom:6px}
+.stat-block{flex:1;min-width:130px;background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:18px 20px}
+.stat-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 .stat-value{font-family:var(--font-disp);font-size:30px;color:var(--text);line-height:1}
 .stat-unit{font-size:13px;color:var(--muted);font-family:var(--font-body);margin-left:3px}
 
-.grid-section-label{
-  font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;
-  color:var(--muted);margin-bottom:14px;
-}
+.grid-section-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
 .grid-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
 @media(max-width:800px){.grid-row{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:480px){.grid-row{grid-template-columns:1fr}}
 
-.grid-card{
-  background:var(--bg2);border:1px solid var(--bg3);
-  border-radius:var(--radius);overflow:hidden;
-}
-.grid-card-label{
-  padding:10px 14px;font-size:11px;font-weight:600;letter-spacing:1.5px;
-  text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--bg3);
-}
+.grid-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);overflow:hidden}
+.grid-card-label{padding:10px 14px;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--bg3)}
 .grid-card img{width:100%;display:block;aspect-ratio:1;object-fit:contain;background:#000}
 
-/* downloads */
 .dl-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
-.btn-dl{
-  padding:9px 18px;background:var(--bg3);color:var(--text);
-  border:1px solid var(--border);border-radius:9px;font-family:var(--font-body);
-  font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;
-  transition:background .15s,border-color .15s;
-}
+.btn-dl{padding:9px 18px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:9px;font-family:var(--font-body);font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s}
 .btn-dl:hover{background:var(--border);border-color:var(--accent)}
 
-/* explanation */
-.explain-box{
-  background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);
-  padding:18px 20px;font-size:13px;color:var(--muted);line-height:1.7;margin-top:24px;
-}
+.explain-box{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:18px 20px;font-size:13px;color:var(--muted);line-height:1.7;margin-top:24px}
 .explain-box b{color:var(--text)}
 
-/* disclaimer */
-.disclaimer{
-  margin-top:32px;padding:16px 20px;
-  background:#1a1209;border:1px solid #3d2a10;
-  border-radius:var(--radius);font-size:12px;color:#b0936a;line-height:1.65;
+.disclaimer{margin-top:32px;padding:16px 20px;background:#1a1209;border:1px solid #3d2a10;border-radius:var(--radius);font-size:12px;color:#b0936a;line-height:1.65}
+
+/* control inputs in app */
+.ctrl-input{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:10px;color:var(--text);padding:10px 13px;
+  font-family:var(--font-body);font-size:13px;outline:none;
+}
+.ctrl-input:focus{border-color:var(--accent)}
+
+@media(max-width:900px){
+  .landing-wrap{grid-template-columns:1fr}
+  .landing-right{position:static;height:auto;border-top:1px solid var(--bg3)}
+  .landing-left{border-right:none;padding:48px 24px 40px}
+  .hero-title{font-size:42px}
+  .landing-right{padding:40px 24px 60px}
 }
 </style>
 </head>
 <body>
 
-<!-- ══ LOGIN OVERLAY ══════════════════════════════════════════════════════ -->
-<div id="login-overlay">
-  <div class="login-card">
-    <div class="login-logo">BurnScan</div>
-    <div class="login-sub">AIIMS · Paediatric Burns Unit</div>
-
-    <label class="field-label" for="inp-user">Username</label>
-    <input id="inp-user" type="text" placeholder="e.g. dr.sharma" autocomplete="username"/>
-
-    <label class="field-label" for="inp-pass">Password</label>
-    <input id="inp-pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
-
-    <div id="login-error">Invalid username or password.</div>
-
-    <button class="btn-primary" id="btn-login">Sign in →</button>
-
-    <div class="login-hint">
-      Demo logins:<br>
-      <code>dr.sharma</code> / <code>aiims2024</code> &nbsp;·&nbsp;
-      <code>dr.mehta</code> / <code>burns123</code>
-    </div>
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">Burn<span>Scan</span></div>
+  <div class="topbar-right" id="topbar-auth-info" style="display:none">
+    <span>Signed in as <b id="user-label">—</b></span>
+    <button id="btn-logout">Sign out</button>
   </div>
 </div>
 
-<!-- ══ APP SHELL ══════════════════════════════════════════════════════════ -->
-<div id="app">
+<!-- ═══════════════════ LANDING PAGE ═══════════════════ -->
+<div id="landing">
+  <div class="landing-wrap">
 
-  <!-- Topbar -->
-  <div class="topbar">
-    <div class="logo">Burn<span>Scan</span></div>
-    <div class="topbar-right">
-      <span>Signed in as <b id="user-label">—</b></span>
-      <button id="btn-logout">Sign out</button>
+    <!-- LEFT: hero + workflow -->
+    <div class="landing-left">
+      <div class="eyebrow">Paediatric Burn Analyser</div>
+
+      <div class="hero-title">
+        Clinical burn<br>analysis, <em>faster.</em>
+      </div>
+      <div class="hero-sub">
+        BurnScan analyses clinical wound photographs using colour, depth, and texture feature extraction — delivering annotated grid overlays and burn degree classification in seconds.
+      </div>
+
+      <div style="font-family:var(--font-disp);font-size:30px;letter-spacing:-1px;color:var(--text);margin-bottom:24px">How it works</div>
+
+      <!-- Horizontal flowchart -->
+      <div style="display:flex;align-items:flex-start;gap:0;margin-bottom:44px;overflow-x:auto;padding-bottom:4px">
+
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:96px;flex:1">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-disp);font-size:14px;color:var(--accent);margin-bottom:9px;flex-shrink:0">1</div>
+          <div style="font-size:12px;font-weight:500;color:var(--text);text-align:center;line-height:1.4">Sign in</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:3px;line-height:1.4">Use demo credentials</div>
+        </div>
+        <div style="flex:1;height:1px;background:var(--border);margin-top:18px;min-width:12px"></div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:96px;flex:1">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-disp);font-size:14px;color:var(--accent);margin-bottom:9px;flex-shrink:0">2</div>
+          <div style="font-size:12px;font-weight:500;color:var(--text);text-align:center;line-height:1.4">Upload image</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:3px;line-height:1.4">JPG or PNG wound photo</div>
+        </div>
+        <div style="flex:1;height:1px;background:var(--border);margin-top:18px;min-width:12px"></div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:96px;flex:1">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-disp);font-size:14px;color:var(--accent);margin-bottom:9px;flex-shrink:0">3</div>
+          <div style="font-size:12px;font-weight:500;color:var(--text);text-align:center;line-height:1.4">Set block size k</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:3px;line-height:1.4">k = 5 or 10 recommended</div>
+        </div>
+        <div style="flex:1;height:1px;background:var(--border);margin-top:18px;min-width:12px"></div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:96px;flex:1">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-disp);font-size:14px;color:var(--accent);margin-bottom:9px;flex-shrink:0">4</div>
+          <div style="font-size:12px;font-weight:500;color:var(--text);text-align:center;line-height:1.4">Patient info</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:3px;line-height:1.4">ID &amp; age — optional</div>
+        </div>
+        <div style="flex:1;height:1px;background:var(--border);margin-top:18px;min-width:12px"></div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:96px;flex:1">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--accent);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-disp);font-size:14px;color:#fff;margin-bottom:9px;flex-shrink:0">5</div>
+          <div style="font-size:12px;font-weight:500;color:var(--text);text-align:center;line-height:1.4">Analyse</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:3px;line-height:1.4">Get results instantly</div>
+        </div>
+
+      </div>
+
+      <div class="steps-label">Step details</div>
+
+      <div class="steps">
+
+        <div class="step">
+          <div class="step-num-col"><div class="step-num">01</div></div>
+          <div class="step-body-col">
+            <div class="step-title">Sign in to BurnScan</div>
+            <div class="step-desc">Use your department credentials — demo credentials available below.</div>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+              <div class="cred-inline"><span class="k">Username</span><code>dr.sharma</code></div>
+              <div class="cred-inline"><span class="k">Password</span><code>aiims2024</code></div>
+            </div>
+            <div class="step-pills"><span class="pill pill-green">Credentials required</span></div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num-col"><div class="step-num">02</div></div>
+          <div class="step-body-col">
+            <div class="step-title">Upload burn wound image</div>
+            <div class="step-desc">Drag and drop or select a clinical photograph of the burn wound.</div>
+            <div class="step-pills">
+              <span class="pill pill-orange">JPG supported</span>
+              <span class="pill pill-orange">PNG supported</span>
+              <span class="pill pill-orange">Max 20 MB</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num-col"><div class="step-num">03</div></div>
+          <div class="step-body-col">
+            <div class="step-title">Choose block size k</div>
+            <div class="step-desc">Controls grid resolution — k = 5 for finer detail, k = 10 for smoother results.</div>
+            <div class="step-pills">
+              <span class="pill pill-blue">k = 5 · finer detail</span>
+              <span class="pill pill-blue">k = 10 · smoother</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num-col"><div class="step-num">04</div></div>
+          <div class="step-body-col">
+            <div class="step-title">Add patient info <span style="font-size:12px;color:var(--muted);font-weight:400">(optional)</span></div>
+            <div class="step-desc">Enter patient ID and age if available — both fields are optional.</div>
+            <div class="step-pills">
+              <span class="pill pill-purple">Patient ID · optional</span>
+              <span class="pill pill-purple">Age 0–17 yrs · optional</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num-col"><div class="step-num">05</div></div>
+          <div class="step-body-col">
+            <div class="step-title">Click Analyse and review</div>
+            <div class="step-desc">Runs burn mask, depth, and texture analyses in parallel — results ready in seconds.</div>
+            <div class="step-pills">
+              <span class="pill pill-accent">Burn mask grid</span>
+              <span class="pill pill-accent">Depth values</span>
+              <span class="pill pill-accent">Texture grid</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /steps -->
+
+      <div style="margin-top:28px;padding:14px 18px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;font-size:12px;color:#6b7280;line-height:1.7">
+        ⚠ <strong style="color:#b0936a">Research prototype.</strong> All outputs must be reviewed and confirmed by a qualified paediatric burns specialist before any clinical use.
+      </div>
+
+    </div><!-- /landing-left -->
+
+    <!-- RIGHT: login -->
+    <div class="landing-right">
+      <div class="login-card">
+        <div class="login-logo">BurnScan</div>
+        <div class="login-tagline">Paediatric Burn Analyser</div>
+
+        <label class="field-label" for="inp-user">Username</label>
+        <input id="inp-user" type="text" placeholder="e.g. dr.sharma" autocomplete="username"/>
+
+        <label class="field-label" for="inp-pass">Password</label>
+        <input id="inp-pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+
+        <div id="login-error">Invalid username or password.</div>
+
+        <button class="btn-primary" id="btn-login">Sign in →</button>
+
+        <div class="login-divider"><span>demo credentials</span></div>
+
+        <div class="login-hint">
+          <strong style="color:#9ca3af;font-size:11px;letter-spacing:1px;text-transform:uppercase">Username</strong> &nbsp;·&nbsp; <strong style="color:#9ca3af;font-size:11px;letter-spacing:1px;text-transform:uppercase">Password</strong><br>
+          <code>dr.sharma</code> &nbsp;/&nbsp; <code>aiims2024</code><br>
+          <code>dr.mehta</code> &nbsp;/&nbsp; <code>burns123</code>
+        </div>
+      </div>
     </div>
+
   </div>
+</div><!-- /landing -->
+
+<!-- ═══════════════════ APP SHELL ═══════════════════ -->
+<div id="app">
 
   <!-- Hero / upload -->
   <div class="hero">
-    <div class="eyebrow">Paediatric Burns Analysis · AIIMS New Delhi</div>
-    <div class="hero-title">Upload wound image</div>
+    <div class="eyebrow2">Paediatric Burn Analyser</div>
+    <div class="hero-title2">Upload wound image</div>
     <div class="hero-body">
       Upload a clinical photograph of the burn wound. The pipeline extracts colour,
-      depth, and texture features and renders annotated block-average grid overlays —
-      identical to the Colab notebook output.
+      depth, and texture features and renders annotated block-average grid overlays.
     </div>
 
     <div class="controls">
-
       <!-- Drop zone -->
       <div id="drop-zone">
         <input id="file-input" type="file" accept="image/jpeg,image/png"/>
@@ -293,17 +497,11 @@ input[type=range]::-webkit-slider-thumb{
       <!-- Patient meta -->
       <div class="control-group">
         <span class="control-label">Patient ID</span>
-        <input id="inp-pid" type="text" placeholder="e.g. P-2024-001"
-               style="background:var(--bg3);border:1px solid var(--border);
-                      border-radius:10px;color:var(--text);padding:10px 13px;
-                      font-family:var(--font-body);font-size:13px;outline:none;width:160px"/>
+        <input id="inp-pid" type="text" placeholder="e.g. P-2024-001" class="ctrl-input" style="width:160px"/>
       </div>
       <div class="control-group">
         <span class="control-label">Age (yrs)</span>
-        <input id="inp-age" type="number" min="0" max="17" placeholder="5"
-               style="background:var(--bg3);border:1px solid var(--border);
-                      border-radius:10px;color:var(--text);padding:10px 13px;
-                      font-family:var(--font-body);font-size:13px;outline:none;width:100px"/>
+        <input id="inp-age" type="number" min="0" max="17" placeholder="5" class="ctrl-input" style="width:100px"/>
       </div>
 
       <button id="btn-analyse" disabled>Analyse →</button>
@@ -318,7 +516,6 @@ input[type=range]::-webkit-slider-thumb{
 
   <!-- Results -->
   <div id="results">
-
     <div class="results-header">
       <div id="degree-pill" class="degree-pill">—</div>
       <div class="stat-row">
@@ -345,7 +542,6 @@ input[type=range]::-webkit-slider-thumb{
       </div>
     </div>
 
-    <!-- Grid images -->
     <div class="grid-section-label">Grid overlay outputs</div>
     <div class="grid-row">
       <div class="grid-card">
@@ -366,226 +562,180 @@ input[type=range]::-webkit-slider-thumb{
       </div>
     </div>
 
-    <!-- Downloads -->
     <div class="dl-row" id="dl-row"></div>
-
-    <!-- Explanation -->
     <div class="explain-box" id="explain-box">—</div>
-
-    <!-- Disclaimer -->
     <div class="disclaimer">
       ⚠️ <strong>Research prototype only.</strong>
       This tool has not been clinically validated and must not be used as the sole basis
       for any clinical decision. All outputs must be reviewed and confirmed by a qualified
-      paediatric burns specialist. AIIMS New Delhi · Paediatric Surgery Department.
+      paediatric burns specialist.
     </div>
-
-  </div><!-- /results -->
+  </div>
 
 </div><!-- /app -->
 
 <script>
-  // ── Config ────────────────────────────────────────────────────────────────
-  const API_BASE = window.location.origin;
-  
-  // ── Credentials (demo only — move server-side for production) ────────────
-  const USERS = {
-    "dr.sharma": { password: "aiims2024", role: "Doctor",   name: "Dr. Priya Sharma" },
-    "dr.mehta":  { password: "burns123",  role: "Resident", name: "Dr. Arjun Mehta"  },
-    "admin":     { password: "admin123",  role: "Admin",    name: "Admin"            },
-  };
-  
-  // ── Login ─────────────────────────────────────────────────────────────────
-  const loginOverlay = document.getElementById("login-overlay");
-  const appEl        = document.getElementById("app");
-  const errEl        = document.getElementById("login-error");
-  
-  function tryLogin() {
-    const u = document.getElementById("inp-user").value.trim();
-    const p = document.getElementById("inp-pass").value;
-    if (USERS[u] && USERS[u].password === p) {
-      loginOverlay.style.display = "none";
-      appEl.style.display = "block";
-      document.getElementById("user-label").textContent =
-        `${USERS[u].name} · ${USERS[u].role}`;
-      errEl.style.display = "none";
-    } else {
-      errEl.style.display = "block";
-    }
+const API_BASE = window.location.origin;
+
+const USERS = {
+  "dr.sharma": { password: "aiims2024", role: "Doctor",   name: "Dr. Priya Sharma" },
+  "dr.mehta":  { password: "burns123",  role: "Resident", name: "Dr. Arjun Mehta"  },
+  "admin":     { password: "admin123",  role: "Admin",    name: "Admin"            },
+};
+
+const landingEl = document.getElementById("landing");
+const appEl     = document.getElementById("app");
+const errEl     = document.getElementById("login-error");
+
+function tryLogin() {
+  const u = document.getElementById("inp-user").value.trim();
+  const p = document.getElementById("inp-pass").value;
+  if (USERS[u] && USERS[u].password === p) {
+    landingEl.style.display = "none";
+    appEl.style.display     = "block";
+    document.getElementById("topbar-auth-info").style.display = "flex";
+    document.getElementById("user-label").textContent = `${USERS[u].name} · ${USERS[u].role}`;
+    errEl.style.display = "none";
+  } else {
+    errEl.style.display = "block";
   }
-  
-  document.getElementById("btn-login").addEventListener("click", tryLogin);
-  ["inp-user","inp-pass"].forEach(id =>
-    document.getElementById(id).addEventListener("keydown", e => {
-      if (e.key === "Enter") tryLogin();
-    })
-  );
-  document.getElementById("btn-logout").addEventListener("click", () => {
-    loginOverlay.style.display = "flex";
-    appEl.style.display = "none";
-    document.getElementById("results").style.display = "none";
-    document.getElementById("inp-user").value = "";
-    document.getElementById("inp-pass").value = "";
-    selectedFile = null;
-    document.getElementById("file-name").textContent = "";
-    document.getElementById("btn-analyse").disabled = true;
-  });
-  
-  // ── File input / drag-drop ────────────────────────────────────────────────
-  let selectedFile = null;
-  const dropZone  = document.getElementById("drop-zone");
-  const fileInput = document.getElementById("file-input");
-  
-  dropZone.addEventListener("click", () => fileInput.click());
-  fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
-  
-  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
-  dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("dragover"));
-  dropZone.addEventListener("drop", e => {
-    e.preventDefault();
-    dropZone.classList.remove("dragover");
-    setFile(e.dataTransfer.files[0]);
-  });
-  
-  function setFile(f) {
-    if (!f) return;
-    selectedFile = f;
-    document.getElementById("file-name").textContent = f.name;
-    document.getElementById("btn-analyse").disabled = false;
-  
-    const reader = new FileReader();
-    reader.onload = e => {
-      document.getElementById("img-orig").src = e.target.result;
+}
+
+document.getElementById("btn-login").addEventListener("click", tryLogin);
+["inp-user","inp-pass"].forEach(id =>
+  document.getElementById(id).addEventListener("keydown", e => { if (e.key === "Enter") tryLogin(); })
+);
+
+document.getElementById("btn-logout").addEventListener("click", () => {
+  landingEl.style.display = "block";
+  appEl.style.display     = "none";
+  document.getElementById("topbar-auth-info").style.display = "none";
+  document.getElementById("results").style.display = "none";
+  document.getElementById("inp-user").value = "";
+  document.getElementById("inp-pass").value = "";
+  selectedFile = null;
+  document.getElementById("file-name").textContent = "";
+  document.getElementById("btn-analyse").disabled = true;
+});
+
+// File input
+let selectedFile = null;
+const dropZone  = document.getElementById("drop-zone");
+const fileInput = document.getElementById("file-input");
+
+dropZone.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  setFile(e.dataTransfer.files[0]);
+});
+
+function setFile(f) {
+  if (!f) return;
+  selectedFile = f;
+  document.getElementById("file-name").textContent = f.name;
+  document.getElementById("btn-analyse").disabled = false;
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById("img-orig").src = e.target.result; };
+  reader.readAsDataURL(f);
+}
+
+const kSlider = document.getElementById("k-slider");
+kSlider.addEventListener("input", () => { document.getElementById("k-val").textContent = kSlider.value; });
+
+function buildFormData() {
+  const fd = new FormData();
+  fd.append("file",        selectedFile);
+  fd.append("k",           kSlider.value);
+  fd.append("patient_id",  document.getElementById("inp-pid").value || "");
+  fd.append("patient_age", document.getElementById("inp-age").value || "");
+  return fd;
+}
+
+async function callAnalyse(view) {
+  const resp = await fetch(`${API_BASE}/api/analyse?view=${view}`, { method:"POST", body:buildFormData() });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail || `Server error ${resp.status} (view=${view})`);
+  }
+  return resp.json();
+}
+
+document.getElementById("btn-analyse").addEventListener("click", async () => {
+  if (!selectedFile) return;
+  const spinner = document.getElementById("spinner");
+  const results = document.getElementById("results");
+  const btn     = document.getElementById("btn-analyse");
+  btn.disabled          = true;
+  spinner.style.display = "flex";
+  results.style.display = "none";
+  try {
+    const [burnData, depthData, textureData] = await Promise.all([
+      callAnalyse("burn"), callAnalyse("depth"), callAnalyse("texture"),
+    ]);
+    const data = {
+      ...burnData,
+      grids: {
+        burn_mask: burnData.grid.png,
+        depth:     depthData.grid.png,
+        texture:   textureData.grid.png,
+      },
     };
-    reader.readAsDataURL(f);
+    renderResults(data);
+  } catch (e) {
+    alert("Analysis failed: " + e.message);
+  } finally {
+    spinner.style.display = "none";
+    btn.disabled          = false;
   }
-  
-  // ── k slider ──────────────────────────────────────────────────────────────
-  const kSlider = document.getElementById("k-slider");
-  kSlider.addEventListener("input", () => {
-    document.getElementById("k-val").textContent = kSlider.value;
+});
+
+function renderResults(data) {
+  const c  = data.classification;
+  const ts = new Date(data.timestamp);
+  const pill = document.getElementById("degree-pill");
+  pill.textContent      = c.degree;
+  pill.style.background = c.colour + "22";
+  pill.style.color      = c.colour;
+  pill.style.border     = `1px solid ${c.colour}55`;
+
+  document.getElementById("stat-degree").textContent = c.degree.split(" ")[0] + " " + (c.degree.split(" ")[1] || "");
+  document.getElementById("stat-conf").innerHTML     = `${Math.round(c.confidence*100)}<span class="stat-unit">%</span>`;
+  document.getElementById("stat-tbsa").innerHTML     = `${c.tbsa_pct}<span class="stat-unit">%</span>`;
+  document.getElementById("stat-k").innerHTML        = `${data.block_size_k}<span class="stat-unit">px</span>`;
+  document.getElementById("stat-ts").textContent     = ts.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+
+  const grids = data.grids;
+  document.getElementById("img-burn").src    = "data:image/png;base64," + grids.burn_mask;
+  document.getElementById("img-depth").src   = "data:image/png;base64," + grids.depth;
+  document.getElementById("img-texture").src = "data:image/png;base64," + grids.texture;
+
+  const dlRow = document.getElementById("dl-row");
+  dlRow.innerHTML = "";
+  [["⬇ Burn mask", grids.burn_mask, "burn_mask.png"],
+   ["⬇ Depth grid", grids.depth,    "depth_grid.png"],
+   ["⬇ Texture",    grids.texture,  "texture_grid.png"]].forEach(([label, b64, fname]) => {
+    const a = document.createElement("a");
+    a.className = "btn-dl";
+    a.textContent = label;
+    a.href = "data:image/png;base64," + b64;
+    a.download = fname;
+    dlRow.appendChild(a);
   });
-  
-  // ── Spinner helper ────────────────────────────────────────────────────────
-  function setSpinnerText(msg) {
-    const el = document.getElementById("spinner-text");
-    if (el) el.textContent = msg;
-  }
-  
-  // ── Helper: build a fresh FormData (a FormData is consumed by fetch, so we
-  //          need a NEW one for every parallel call) ────────────────────────
-  function buildFormData() {
-    const fd = new FormData();
-    fd.append("file",        selectedFile);
-    fd.append("k",           kSlider.value);
-    fd.append("patient_id",  document.getElementById("inp-pid").value || "");
-    fd.append("patient_age", document.getElementById("inp-age").value || "");
-    return fd;
-  }
-  
-  // ── Helper: one analyse call for a single view ──────────────────────────
-  async function callAnalyse(view) {
-    const resp = await fetch(`${API_BASE}/api/analyse?view=${view}`, {
-      method: "POST",
-      body:   buildFormData(),
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error ${resp.status} (view=${view})`);
-    }
-    return resp.json();
-  }
-  
-  // ── Analyse (3 parallel calls, one per overlay) ─────────────────────────
-  document.getElementById("btn-analyse").addEventListener("click", async () => {
-    if (!selectedFile) return;
-  
-    const spinner = document.getElementById("spinner");
-    const results = document.getElementById("results");
-    const btn     = document.getElementById("btn-analyse");
-  
-    btn.disabled         = true;
-    spinner.style.display = "flex";
-    results.style.display = "none";
-    setSpinnerText("Running 3 analyses in parallel…");
-  
-    try {
-      // Fire all three at once. Total wall-clock ≈ slowest single call (~25 s),
-      // not the sum.
-      const [burnData, depthData, textureData] = await Promise.all([
-        callAnalyse("burn"),
-        callAnalyse("depth"),
-        callAnalyse("texture"),
-      ]);
-  
-      // Stitch the three single-view responses into one object that has the
-      // same shape renderResults() already expects.
-      const data = {
-        ...burnData,                              // status, timestamp, classification, …
-        grids: {
-          burn_mask: burnData.grid.png,
-          depth:     depthData.grid.png,
-          texture:   textureData.grid.png,
-        },
-      };
-  
-      renderResults(data);
-    } catch (e) {
-      alert("Analysis failed: " + e.message);
-    } finally {
-      spinner.style.display = "none";
-      btn.disabled          = false;
-    }
-  });
-  
-  // ── Render results ────────────────────────────────────────────────────────
-  function renderResults(data) {
-    const c  = data.classification;
-    const ts = new Date(data.timestamp);
-  
-    const pill = document.getElementById("degree-pill");
-    pill.textContent       = c.degree;
-    pill.style.background  = c.colour + "22";
-    pill.style.color       = c.colour;
-    pill.style.border      = `1px solid ${c.colour}55`;
-  
-    document.getElementById("stat-degree").textContent = c.degree.split(" ")[0] + " " + (c.degree.split(" ")[1] || "");
-    document.getElementById("stat-conf").innerHTML     = `${Math.round(c.confidence*100)}<span class="stat-unit">%</span>`;
-    document.getElementById("stat-tbsa").innerHTML     = `${c.tbsa_pct}<span class="stat-unit">%</span>`;
-    document.getElementById("stat-k").innerHTML        = `${data.block_size_k}<span class="stat-unit">px</span>`;
-    document.getElementById("stat-ts").textContent     = ts.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-  
-    const grids = data.grids;
-    document.getElementById("img-burn").src    = "data:image/png;base64," + grids.burn_mask;
-    document.getElementById("img-depth").src   = "data:image/png;base64," + grids.depth;
-    document.getElementById("img-texture").src = "data:image/png;base64," + grids.texture;
-  
-    const dlRow = document.getElementById("dl-row");
-    dlRow.innerHTML = "";
-    const dlItems = [
-      ["⬇ Burn mask",  grids.burn_mask,  "burn_mask.png"],
-      ["⬇ Depth grid", grids.depth,      "depth_grid.png"],
-      ["⬇ Texture",    grids.texture,    "texture_grid.png"],
-    ];
-    dlItems.forEach(([label, b64, fname]) => {
-      const a = document.createElement("a");
-      a.className   = "btn-dl";
-      a.textContent = label;
-      a.href        = "data:image/png;base64," + b64;
-      a.download    = fname;
-      dlRow.appendChild(a);
-    });
-  
-    document.getElementById("explain-box").innerHTML =
-      `<b>Analysis detail:</b><br>${c.explanation}<br><br>
-       <span style="color:#4b5563;font-size:12px">
-         ⓘ Confidence is a heuristic score, not a validated probability.
-         TBSA is a placeholder — implement Lund &amp; Browder chart for accurate paediatric TBSA.
-       </span>`;
-  
-    document.getElementById("results").style.display = "block";
-    document.getElementById("results").scrollIntoView({behavior:"smooth"});
-  }
-  </script>
+
+  document.getElementById("explain-box").innerHTML =
+    `<b>Analysis detail:</b><br>${c.explanation}<br><br>
+     <span style="color:#4b5563;font-size:12px">
+       ⓘ Confidence is a heuristic score, not a validated probability.
+       TBSA is a placeholder — implement Lund &amp; Browder chart for accurate paediatric TBSA.
+     </span>`;
+
+  document.getElementById("results").style.display = "block";
+  document.getElementById("results").scrollIntoView({behavior:"smooth"});
+}
+</script>
 </body>
 </html>
